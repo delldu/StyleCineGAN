@@ -368,7 +368,7 @@ class ToRGB(nn.Module):
         return out
 
 
-class Generator(nn.Module):
+class P2S2PGenerator(nn.Module):
     def __init__(self,
             size,
             style_dim,

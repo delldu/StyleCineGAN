@@ -14,7 +14,7 @@ from torchvision import transforms, utils
 import lpips
 
 sys.path.append('pixel2style2pixel/')
-from pixel2style2pixel.models.stylegan2.model import Generator, get_keys
+from pixel2style2pixel.models.stylegan2.model import P2S2PGenerator, get_keys
 
 
 from nets.feature_style_encoder import *
@@ -73,19 +73,20 @@ class Trainer(nn.Module):
                                  use_coeff=enc_residual_coeff, 
                                  resnet_layer=resnet_layers, 
                                  stride=self.stride, # (2, 2)
-                                )
+                                ) # Model Size() -- 427
         
+
         ##########################
         # Other nets
-        self.StyleGAN = self.init_stylegan(config)
+        self.StyleGAN = self.init_stylegan() #config)
         # self.Arcface = iresnet50()
         # self.parsing_net = BiSeNet(n_classes=19)
         # Optimizers
         # Latent encoder
-        self.enc_params = list(self.enc.parameters()) 
-        if 'freeze_iresnet' in self.config and self.config['freeze_iresnet']: # False
-            pdb.set_trace()
-            self.enc_params =  list(self.enc.styles.parameters())
+        # self.enc_params = list(self.enc.parameters()) 
+        # if 'freeze_iresnet' in self.config and self.config['freeze_iresnet']: # False
+        #     pdb.set_trace()
+        #     self.enc_params =  list(self.enc.styles.parameters())
         # if 'optimizer' in self.config and self.config['optimizer'] == 'ranger': # True
         #     self.enc_opt = Ranger(self.enc_params, lr=config['lr'], betas=(config['beta_1'], config['beta_2']), weight_decay=config['weight_decay'])
         # else:
@@ -132,18 +133,19 @@ class Trainer(nn.Module):
         # self.loss_fn = lpips.LPIPS(net='alex', spatial=False)
         # self.loss_fn.to(self.device)
     
-    def init_stylegan(self, config):
+    # def init_stylegan(self, config):
+    def init_stylegan(self):
         """StyleGAN = G_main(
             truncation_psi=config['truncation_psi'], 
             resolution=config['resolution'], 
             use_noise=config['use_noise'],  
             randomize_noise=config['randomize_noise']
         )"""
-        StyleGAN = Generator(1024, 512, 8)
+        StyleGAN = P2S2PGenerator(1024, 512, 8)
         return StyleGAN
     
-    def mapping(self, z):
-        return self.StyleGAN.get_latent(z).detach()
+    # def mapping(self, z):
+    #     return self.StyleGAN.get_latent(z).detach()
 
     # def L1loss(self, input, target):
     #     return nn.L1Loss()(input,target)
@@ -194,10 +196,10 @@ class Trainer(nn.Module):
     #         loss.append(self.L1loss(enc_feat[i], dec_feat[i]))
     #     return loss
     
-    def encode(self, img):
-        w_recon, fea = self.enc(downscale(img, self.scale, self.scale_mode)) 
-        w_recon = w_recon + self.dlatent_avg
-        return w_recon, fea
+    # def encode(self, img):
+    #     w_recon, fea = self.enc(downscale(img, self.scale, self.scale_mode)) 
+    #     w_recon = w_recon + self.dlatent_avg
+    #     return w_recon, fea
 
     def get_image(self, w=None, img=None, noise=None, zero_noise_input=True, training_mode=True):
         # w = None
@@ -210,15 +212,14 @@ class Trainer(nn.Module):
             pdb.set_trace()
             x_1, _ = self.StyleGAN([w], input_is_latent=True, noise = n_1)
         
-        
         w_delta = None
         fea = None
         features = None
-        return_features = False
+        # return_features = False
         # Reconstruction
         k = 0
         if 'use_fs_encoder' in self.config and self.config['use_fs_encoder']: # True
-            return_features = True
+            # return_features = True
             k = self.idx_k
             w_recon, fea = self.enc(downscale(x_1, self.scale, self.scale_mode)) 
             w_recon = w_recon + self.dlatent_avg
@@ -294,13 +295,13 @@ class Trainer(nn.Module):
     #     #     self.loss += self.config['w']['landmark']*self.landmark_loss
     #     return self.loss
 
-    def test(self, w=None, img=None, noise=None, zero_noise_input=True, return_latent=False, training_mode=False):        
+    def test(self, w=None, img=None, noise=None, zero_noise_input=True, return_latent=True, training_mode=False):        
         if 'n_iter' not in self.__dict__.keys():
             self.n_iter = 1e5
         out = self.get_image(w=w, img=img, noise=noise, training_mode=training_mode)
         x_1_recon, x_1, w_recon, w_delta, n_1, fea_1 = out[:6]
         output = [x_1, x_1_recon]
-        if return_latent:
+        if return_latent: # True
             output += [w_recon, fea_1]
         return output
 
@@ -356,12 +357,12 @@ class Trainer(nn.Module):
     def load_model(self, log_dir):
         self.enc.load_state_dict(torch.load('{:s}/enc.pth.tar'.format(log_dir)))
 
-    def load_checkpoint(self, checkpoint_path):
-        state_dict = torch.load(checkpoint_path)
-        self.enc.load_state_dict(state_dict['enc_state_dict'])
-        # self.enc_opt.load_state_dict(state_dict['enc_opt_state_dict'])
-        # self.enc_scheduler.load_state_dict(state_dict['enc_scheduler_state_dict'])
-        return state_dict['n_epoch'] + 1
+    # def load_checkpoint(self, checkpoint_path):
+    #     state_dict = torch.load(checkpoint_path)
+    #     self.enc.load_state_dict(state_dict['enc_state_dict'])
+    #     # self.enc_opt.load_state_dict(state_dict['enc_opt_state_dict'])
+    #     # self.enc_scheduler.load_state_dict(state_dict['enc_scheduler_state_dict'])
+    #     return state_dict['n_epoch'] + 1
 
     # def update(self, w=None, img=None, noise=None, real_img=None, n_iter=0):
     #     self.n_iter = n_iter
