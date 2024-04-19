@@ -171,16 +171,16 @@ class EqualLinear(nn.Module):
         )
 
 
-class ScaledLeakyReLU(nn.Module):
-    def __init__(self, negative_slope=0.2):
-        super().__init__()
+# class ScaledLeakyReLU(nn.Module):
+#     def __init__(self, negative_slope=0.2):
+#         super().__init__()
 
-        self.negative_slope = negative_slope
+#         self.negative_slope = negative_slope
 
-    def forward(self, input):
-        out = F.leaky_relu(input, negative_slope=self.negative_slope)
+#     def forward(self, input):
+#         out = F.leaky_relu(input, negative_slope=self.negative_slope)
 
-        return out * math.sqrt(2)
+#         return out * math.sqrt(2)
 
 
 class ModulatedConv2d(nn.Module):
@@ -310,8 +310,7 @@ class ConstantInput(nn.Module):
 
 
 class StyledConv(nn.Module):
-    def __init__(
-            self,
+    def __init__(self,
             in_channel,
             out_channel,
             kernel_size,
@@ -333,8 +332,6 @@ class StyledConv(nn.Module):
         )
 
         self.noise = NoiseInjection()
-        # self.bias = nn.Parameter(torch.zeros(1, out_channel, 1, 1))
-        # self.activate = ScaledLeakyReLU(0.2)
         self.activate = FusedLeakyReLU(out_channel)
 
     def forward(self, input, style, noise=None):
@@ -362,7 +359,6 @@ class ToRGB(nn.Module):
 
         if skip is not None:
             skip = self.upsample(skip)
-
             out = out + skip
 
         return out
@@ -386,17 +382,14 @@ class P2S2PGenerator(nn.Module):
         # blur_kernel = [1, 3, 3, 1]
         # lr_mlp = 0.01
         
-        self.size = size
-
-        self.style_dim = style_dim
+        # self.size = size
+        # self.style_dim = style_dim
 
         layers = [PixelNorm()]
 
         for i in range(n_mlp):
             layers.append(
-                EqualLinear(
-                    style_dim, style_dim, lr_mul=lr_mlp, activation='fused_lrelu'
-                )
+                EqualLinear(style_dim, style_dim, lr_mul=lr_mlp, activation='fused_lrelu')
             )
 
         self.style = nn.Sequential(*layers)
@@ -414,9 +407,7 @@ class P2S2PGenerator(nn.Module):
         }
 
         self.input = ConstantInput(self.channels[4])
-        self.conv1 = StyledConv(
-            self.channels[4], self.channels[4], 3, style_dim, blur_kernel=blur_kernel
-        )
+        self.conv1 = StyledConv(self.channels[4], self.channels[4], 3, style_dim, blur_kernel=blur_kernel)
         self.to_rgb1 = ToRGB(self.channels[4], style_dim, upsample=False)
 
         self.log_size = int(math.log(size, 2))
@@ -460,39 +451,12 @@ class P2S2PGenerator(nn.Module):
 
         self.n_latent = self.log_size * 2 - 2
 
-    # def make_noise(self):
-    #     pdb.set_trace()
 
-    #     device = self.input.input.device
-
-    #     noises = [torch.randn(1, 1, 2 ** 2, 2 ** 2, device=device)]
-
-    #     for i in range(3, self.log_size + 1):
-    #         for _ in range(2):
-    #             noises.append(torch.randn(1, 1, 2 ** i, 2 ** i, device=device))
-
-    #     return noises
-
-    # def mean_latent(self, n_latent):
-    #     latent_in = torch.randn(
-    #         n_latent, self.style_dim, device=self.input.input.device
-    #     )
-    #     latent = self.style(latent_in).mean(0, keepdim=True)
-
-    #     return latent
-
-    # def get_latent(self, input):
-    #     return self.style(input)
-    
     def forward(self,
             styles,
             features_in=None,
             feature_scale=1.0
     ):
-        # if not input_is_latent: # False
-        #     styles = [self.style(s) for s in styles]
-        # else:
-        #     pdb.set_trace()
         styles = [self.style(s) for s in styles]
         latent = styles[0]
 
@@ -500,28 +464,6 @@ class P2S2PGenerator(nn.Module):
             getattr(self.noises, f'noise_{i}') for i in range(self.num_layers)
         ]
 
-        # if len(styles) < 2:
-        #     inject_index = self.n_latent
-
-        #     if styles[0].ndim < 3:
-        #         pdb.set_trace()
-        #         latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
-        #     else:
-        #         latent = styles[0]
-
-        # else:
-        #     pdb.set_trace()
-
-        #     if inject_index is None:
-        #         inject_index = random.randint(1, self.n_latent - 1)
-
-        #     latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
-        #     latent2 = styles[1].unsqueeze(1).repeat(1, self.n_latent - inject_index, 1)
-
-        #     latent = torch.cat([latent, latent2], 1)
-        
-        # latent = styles[0]
-        
         def insert_feature(x, layer_idx):
             if features_in is not None and features_in[layer_idx] is not None:
                 # feature_scale === 1.0                
@@ -537,7 +479,6 @@ class P2S2PGenerator(nn.Module):
         skip = self.to_rgb1(out, latent[:, 1])
 
         i = 1
-        # import pdb; pdb.set_trace()
         for conv1, conv2, noise1, noise2, to_rgb in zip(
                 self.convs[::2], self.convs[1::2], noise[1::2], noise[2::2], self.to_rgbs
         ):  
@@ -555,134 +496,3 @@ class P2S2PGenerator(nn.Module):
         image = skip
 
         return image, outs
-
-
-# class ConvLayer(nn.Sequential):
-#     def __init__(
-#             self,
-#             in_channel,
-#             out_channel,
-#             kernel_size,
-#             downsample=False,
-#             blur_kernel=[1, 3, 3, 1],
-#             bias=True,
-#             activate=True,
-#     ):
-#         layers = []
-
-#         if downsample:
-#             factor = 2
-#             p = (len(blur_kernel) - factor) + (kernel_size - 1)
-#             pad0 = (p + 1) // 2
-#             pad1 = p // 2
-
-#             layers.append(Blur(blur_kernel, pad=(pad0, pad1)))
-
-#             stride = 2
-#             self.padding = 0
-
-#         else:
-#             stride = 1
-#             self.padding = kernel_size // 2
-
-#         layers.append(
-#             EqualConv2d(
-#                 in_channel,
-#                 out_channel,
-#                 kernel_size,
-#                 padding=self.padding,
-#                 stride=stride,
-#                 bias=bias and not activate,
-#             )
-#         )
-
-#         if activate:
-#             if bias:
-#                 layers.append(FusedLeakyReLU(out_channel))
-
-#             else:
-#                 layers.append(ScaledLeakyReLU(0.2))
-
-#         super().__init__(*layers)
-
-
-# class ResBlock(nn.Module):
-#     def __init__(self, in_channel, out_channel, blur_kernel=[1, 3, 3, 1]):
-#         super().__init__()
-
-#         self.conv1 = ConvLayer(in_channel, in_channel, 3)
-#         self.conv2 = ConvLayer(in_channel, out_channel, 3, downsample=True)
-
-#         self.skip = ConvLayer(
-#             in_channel, out_channel, 1, downsample=True, activate=False, bias=False
-#         )
-
-#     def forward(self, input):
-#         out = self.conv1(input)
-#         out = self.conv2(out)
-
-#         skip = self.skip(input)
-#         out = (out + skip) / math.sqrt(2)
-
-#         return out
-
-
-# class Discriminator(nn.Module):
-#     def __init__(self, size, channel_multiplier=2, blur_kernel=[1, 3, 3, 1]):
-#         super().__init__()
-
-#         channels = {
-#             4: 512,
-#             8: 512,
-#             16: 512,
-#             32: 512,
-#             64: 256 * channel_multiplier,
-#             128: 128 * channel_multiplier,
-#             256: 64 * channel_multiplier,
-#             512: 32 * channel_multiplier,
-#             1024: 16 * channel_multiplier,
-#         }
-
-#         convs = [ConvLayer(3, channels[size], 1)]
-
-#         log_size = int(math.log(size, 2))
-
-#         in_channel = channels[size]
-
-#         for i in range(log_size, 2, -1):
-#             out_channel = channels[2 ** (i - 1)]
-
-#             convs.append(ResBlock(in_channel, out_channel, blur_kernel))
-
-#             in_channel = out_channel
-
-#         self.convs = nn.Sequential(*convs)
-
-#         self.stddev_group = 4
-#         self.stddev_feat = 1
-
-#         self.final_conv = ConvLayer(in_channel + 1, channels[4], 3)
-#         self.final_linear = nn.Sequential(
-#             EqualLinear(channels[4] * 4 * 4, channels[4], activation='fused_lrelu'),
-#             EqualLinear(channels[4], 1),
-#         )
-
-#     def forward(self, input):
-#         out = self.convs(input)
-
-#         batch, channel, height, width = out.shape
-#         group = min(batch, self.stddev_group)
-#         stddev = out.view(
-#             group, -1, self.stddev_feat, channel // self.stddev_feat, height, width
-#         )
-#         stddev = torch.sqrt(stddev.var(0, unbiased=False) + 1e-8)
-#         stddev = stddev.mean([2, 3, 4], keepdims=True).squeeze(2)
-#         stddev = stddev.repeat(group, 1, height, width)
-#         out = torch.cat([out, stddev], 1)
-
-#         out = self.final_conv(out)
-
-#         out = out.view(batch, -1)
-#         out = self.final_linear(out)
-
-#         return out

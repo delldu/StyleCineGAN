@@ -10,8 +10,10 @@ from arcface.iresnet import *
 import pdb
 
 class fs_encoder_v2(nn.Module):
-    def __init__(self, n_styles=18, opts=None, residual=False, use_coeff=False, resnet_layer=None, video_input=False, f_maps=512, stride=(1, 1)):
-        super(fs_encoder_v2, self).__init__()  
+    def __init__(self, n_styles=18, opts=None, residual=False, use_coeff=False, 
+        resnet_layer=None, video_input=False, f_maps=512, stride=(1, 1)):
+    
+        super().__init__()  
 
         # n_styles = 18
         # opts = Namespace(config='lhq_k10', real_dataset_path='', 

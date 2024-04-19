@@ -12,7 +12,7 @@ device = torch.device('cuda')
 from option import Options
 from utils.model_utils import load_encoder, load_stylegan2
 from utils.ip_utils import read_image, resize_tensor, to_numpy, to_tensor
-from utils.utils import gan_inversion #,clip_img, predict_mask
+from utils.utils import gan_inversion
 from utils.flow_utils import flow2img
 from utils.cinemagraph_utils import feature_inpaint, resize_flow, resize_feature
 
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # sg2 -- DataParallel((module): Generator(...))
     # opts.sg2_ckpt -- './pretrained_models/stylegan2-pytorch/sg2-lhq-1024.pt'
 
-    encoder  = load_encoder(opts.encoder_ckpt, encoder_type=opts.encoder_type, recon_idx=opts.recon_feature_idx).to(device)
+    encoder  = load_encoder(opts.encoder_ckpt, recon_idx=opts.recon_feature_idx).to(device)
     # encoder -- Trainer((enc): fs_encoder_v2(...))
     # opts.encoder_ckpt -- './pretrained_models'
     # opts.encoder_type -- 'fs', opts.recon_feature_idx -- 10    
@@ -127,32 +127,20 @@ if __name__ == "__main__":
         # generate frames
         pbar = tqdm(total=len(latents))
         for idx, input_latent in enumerate(latents):    
-            result, _ = sg2.module.warp_blend_feature(styles=[input_latent],
-                                                        feature=feature,
-                                                        idx=idx,
-                                                        n_frames=opts.n_frames,
-                                                        flow=flow, ###!!!!!!!!!!!!!!!!###
-                                                        # mode=opts.mode, # 'full'
-                                                        # Z=None,
-                                                        recon_feature_idx=opts.recon_feature_idx,
-                                                        warp_feature_idx=opts.warp_feature_idx,
-                                                        # input_is_latent=True,
-                                                        # return_latents=True,
-                                                        # randomize_noise=False,
-                                                        # is_random=False
-                                              )
+            result = sg2.module.forward(
+                        styles=[input_latent],
+                        feature=feature,
+                        idx=idx,
+                        n_frames=opts.n_frames,
+                        flow=flow, ###!!!!!!!!!!!!!!!!###
+                        recon_feature_idx=opts.recon_feature_idx,
+                        warp_feature_idx=opts.warp_feature_idx,
+                    )
             
             # todos.debug.output_var("result", result)
             # tensor [result] size: [1, 3, 1024, 1024], min: -0.278078, max: -0.139095, mean: -0.248583            
             
-            # up_mask = resize_feature(mask.float(), 1024)
-            # up_flow = resize_flow(flow, 1024)
-            
-            # if opts.image_inpainting: # False
-            #     result = feature_inpaint(result, up_flow, idx, opts.n_frames)
-                
-            if not opts.no_image_composit: # True
-                result = result*up_mask + torch_input.cuda() * (1 - up_mask)
+            result = result*up_mask + torch_input.cuda() * (1 - up_mask)
             
             result = to_numpy(result)[0]
             frames.append(np.array(result))

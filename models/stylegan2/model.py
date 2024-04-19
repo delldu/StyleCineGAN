@@ -53,25 +53,25 @@ class Upsample(nn.Module):
         return out
 
 
-class Downsample(nn.Module):
-    def __init__(self, kernel, factor=2):
-        super().__init__()
+# class Downsample(nn.Module):
+#     def __init__(self, kernel, factor=2):
+#         super().__init__()
 
-        self.factor = factor
-        kernel = make_kernel(kernel)
-        self.register_buffer('kernel', kernel)
+#         self.factor = factor
+#         kernel = make_kernel(kernel)
+#         self.register_buffer('kernel', kernel)
 
-        p = kernel.shape[0] - factor
+#         p = kernel.shape[0] - factor
 
-        pad0 = (p + 1) // 2
-        pad1 = p // 2
+#         pad0 = (p + 1) // 2
+#         pad1 = p // 2
 
-        self.pad = (pad0, pad1)
+#         self.pad = (pad0, pad1)
 
-    def forward(self, input):
-        out = upfirdn2d(input, self.kernel, up=1, down=self.factor, pad=self.pad)
+#     def forward(self, input):
+#         out = upfirdn2d(input, self.kernel, up=1, down=self.factor, pad=self.pad)
 
-        return out
+#         return out
 
 
 class Blur(nn.Module):
@@ -333,8 +333,6 @@ class StyledConv(nn.Module):
         )
 
         self.noise = NoiseInjection()
-        # self.bias = nn.Parameter(torch.zeros(1, out_channel, 1, 1))
-        # self.activate = ScaledLeakyReLU(0.2)
         self.activate = FusedLeakyReLU(out_channel)
 
     def forward(self, input, style, noise=None):
@@ -455,13 +453,12 @@ class Generator(nn.Module):
 
         
         
-    def warp_blend_feature(self,
+    def forward(self,
         styles,
         feature,
         idx,
         n_frames,
         flow,
-        # Z=None,
         recon_feature_idx=10,
         warp_feature_idx=10,
     ):
@@ -476,9 +473,6 @@ class Generator(nn.Module):
         out = self.conv1(out, latent[:, 0], noise=noise[0])
         skip = self.to_rgb1(out, latent[:, 1])
         
-        # blur_kernel = torch.tensor([1, 3, 3, 1]).cuda()
-        
-        
         i = 1
         for conv1, conv2, noise1, noise2, to_rgb in zip(
                 self.convs[::2], self.convs[1::2], \
@@ -491,19 +485,13 @@ class Generator(nn.Module):
             if (i < recon_feature_idx) and (i+1 < recon_feature_idx):
                 out = conv1(out, latent[:,i], noise=noise1)
                 out = conv2(out, latent[:,i+1], noise=noise2)
-                
-                # if is_random and out.size() != feature.size():
-                #     skip = to_rgb(out, latent[:, i+2], skip)      
             else:
-                
                 if i == recon_feature_idx:
                     out = feature
                     out = conv1(out, latent[:,i], noise=noise1)
-                    
                 else:
                     out = conv1(out, latent[:,i], noise=noise1)
 
-                
                 if i == warp_feature_idx:
                     out_ = warp_one_level(out, flow, idx, n_frames)
                     out_ = conv2(out_, latent[:,i+1], noise=noise2)
@@ -532,37 +520,20 @@ class Generator(nn.Module):
             image = skip
         
         
-        return image, latent
-        
-        
-        
-    def forward(
-            self,
-            styles,
-            inject_index=None,
-            truncation=1,
-            truncation_latent=None,
-            input_is_latent=False,
-            noise=None,
-            randomize_noise=True,
-    ):
-        pdb.set_trace()
-        return None
+        return image
 
 
 class ConvLayer(nn.Sequential):
-    def __init__(
-            self,
-            in_channel,
-            out_channel,
-            kernel_size,
-            downsample=False,
-            blur_kernel=[1, 3, 3, 1],
-            bias=True,
-            activate=True,
+    def __init__(self,
+        in_channel,
+        out_channel,
+        kernel_size,
+        downsample=False,
+        blur_kernel=[1, 3, 3, 1],
+        bias=True,
+        activate=True,
     ):
         layers = []
-
         if downsample:
             factor = 2
             p = (len(blur_kernel) - factor) + (kernel_size - 1)
@@ -573,7 +544,6 @@ class ConvLayer(nn.Sequential):
 
             stride = 2
             self.padding = 0
-
         else:
             stride = 1
             self.padding = kernel_size // 2
@@ -592,7 +562,6 @@ class ConvLayer(nn.Sequential):
         if activate:
             if bias:
                 layers.append(FusedLeakyReLU(out_channel))
-
             else:
                 layers.append(ScaledLeakyReLU(0.2))
 
