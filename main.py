@@ -61,7 +61,7 @@ if __name__ == "__main__":
     
     # invert the image ------------------------------------------------------------------------------
     with torch.no_grad():
-        tensor_recon, latent, feature = gan_inversion(encoder, torch_input, model=opts.encoder_type)
+        tensor_recon, latent, feature = gan_inversion(encoder, torch_input)
     # tensor [tensor_recon] size: [1, 3, 1024, 1024], min: -1.422519, max: 1.449161, mean: 0.109709
     # tensor [latent] size: [1, 18, 512], min: -15.776832, max: 11.293081, mean: 0.022378
     # tensor [feature] size: [1, 256, 128, 128], min: -4.576892, max: 4.600057, mean: 0.402872
@@ -132,14 +132,14 @@ if __name__ == "__main__":
                                                         idx=idx,
                                                         n_frames=opts.n_frames,
                                                         flow=flow, ###!!!!!!!!!!!!!!!!###
-                                                        mode=opts.mode, # 'full'
-                                                        Z=None,
+                                                        # mode=opts.mode, # 'full'
+                                                        # Z=None,
                                                         recon_feature_idx=opts.recon_feature_idx,
                                                         warp_feature_idx=opts.warp_feature_idx,
-                                                        input_is_latent=True,
-                                                        return_latents=True,
-                                                        randomize_noise=False,
-                                                        is_random=False
+                                                        # input_is_latent=True,
+                                                        # return_latents=True,
+                                                        # randomize_noise=False,
+                                                        # is_random=False
                                               )
             
             # todos.debug.output_var("result", result)
