@@ -25,52 +25,33 @@ class Trainer(nn.Module):
         self.device = torch.device(self.config['device'])
         self.scale = int(np.log2(config['resolution']/config['enc_resolution'])) # 2
         self.n_styles = 2 * int(np.log2(config['resolution'])) - 2
-        # self.idx_k = 10
 
         # Networks
-        enc_residual = False
-        enc_residual_coeff = False
-        resnet_layers = [4,5,6]
+        # enc_residual = False
+        # enc_residual_coeff = False
+        # resnet_layers = [4,5,6]
 
         # Load encoder
         self.stride = (self.config['fs_stride'], self.config['fs_stride'])
         self.enc = fs_encoder_v2(n_styles=self.n_styles, # 18
                                  opts=opts, 
-                                 residual=enc_residual, # False
-                                 use_coeff=enc_residual_coeff, 
-                                 resnet_layer=resnet_layers, 
+                                 # residual=enc_residual, # False
+                                 # use_coeff=enc_residual_coeff, 
+                                 # resnet_layer=resnet_layers, 
                                  stride=self.stride, # (2, 2)
                                 ) # Model Size() -- 427 M
         
 
-        ##########################
-        # self.StyleGAN = P2S2PGenerator(1024, 512, 8)
 
-    def initialize(self, stylegan_model_path, arcface_model_path, parsing_model_path, w_mean_path):
-        # load StyleGAN model
-        # stylegan_model_path = './pretrained_models/stylegan2-pytorch/sg2-lhq-1024.pt'
-        # arcface_model_path = './pretrained_models/backbone.pth'
-        # parsing_model_path = './pretrained_models/79999_iter.pth'
-        # w_mean_path = './pretrained_models/stylegan2-pytorch/sg2-lhq-1024-mean.pt'
-
-        # state_dict = torch.load(stylegan_model_path)
-        # self.StyleGAN.load_state_dict(state_dict["g_ema"])
-        # self.StyleGAN.to(self.device)
+    def initialize(self, w_mean_path):
         with torch.no_grad():
             self.dlatent_avg = torch.load(w_mean_path).to(self.device)
 
     def get_image(self, img=None):
         x_1 = img
         # Reconstruction
-        # k = self.idx_k # === 10
         w_recon, fea = self.enc(downscale(x_1, self.scale, 'bilinear')) 
         w_recon = w_recon + self.dlatent_avg
-        # features = [None]*k + [fea] + [None]*(17-k)
-
-        # generate image
-        # img_recon, fea_recon = self.StyleGAN([w_recon], features_in=features)
-        # fea_recon = fea_recon[k].detach()
-        # return [img_recon, w_recon, fea]
         return [w_recon, fea]
 
     def test(self, img=None):        
@@ -80,4 +61,5 @@ class Trainer(nn.Module):
         return output
 
     def load_model(self, log_dir):
+        # pretrained_models/logs/lhq_k10/enc.pth.tar ????
         self.enc.load_state_dict(torch.load('{:s}/enc.pth.tar'.format(log_dir)))

@@ -29,19 +29,6 @@ if __name__ == "__main__":
     # make save directory ---------------------------------------------------------------------------
     os.makedirs(f"{opts.save_dir}", exist_ok=True)
     
-    # Namespace(encoder_type='fs', encoder_ckpt='./pretrained_models', 
-    #     sg2_ckpt='./pretrained_models/stylegan2-pytorch/sg2-lhq-1024.pt', 
-    #     datasetgan_dir='./pretrained_models/datasetGAN', 
-    #     eulerian_dir='./pretrained_models/epoch-20-feature_encoder.pth', 
-    #     flownet_dir='./pretrained_models', flownet_mode='sky', feature_level=9, 
-    #     ir_se50='./pretrained_models/model_ir_se50.pth', 
-    #     moco='./pretrained_models/moco_v2_800ep_pretrain.pt', 
-    #     img_path='./samples/0002268', style_path=None, save_dir='./results', 
-    #     n_frames=120, channel_multiplier=2, is_optim=False, optim_step=3000, 
-    #     optim_threshold=0.005, optim_params='feat', initial_lr=0.1, random_sample=False, 
-    #     style_interp=False, style_extrapolate_scale=2.0, mode='full', recon_feature_idx=9, 
-    #     warp_feature_idx=9, vis='True', image_inpainting=False, no_image_composit=False, device=device(type='cuda'))
-
     # load models ------------------------------------------------------------------------------------
     sg2      = load_stylegan2(opts.sg2_ckpt)
     # sg2 -- DataParallel((module): Generator(...))

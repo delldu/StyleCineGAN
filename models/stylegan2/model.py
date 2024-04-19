@@ -53,27 +53,6 @@ class Upsample(nn.Module):
         return out
 
 
-# class Downsample(nn.Module):
-#     def __init__(self, kernel, factor=2):
-#         super().__init__()
-
-#         self.factor = factor
-#         kernel = make_kernel(kernel)
-#         self.register_buffer('kernel', kernel)
-
-#         p = kernel.shape[0] - factor
-
-#         pad0 = (p + 1) // 2
-#         pad1 = p // 2
-
-#         self.pad = (pad0, pad1)
-
-#     def forward(self, input):
-#         out = upfirdn2d(input, self.kernel, up=1, down=self.factor, pad=self.pad)
-
-#         return out
-
-
 class Blur(nn.Module):
     def __init__(self, kernel, pad, upsample_factor=1):
         super().__init__()
@@ -345,12 +324,8 @@ class StyledConv(nn.Module):
     
 
 class ToRGB(nn.Module):
-    def __init__(self, in_channel, style_dim, upsample=True, blur_kernel=[1, 3, 3, 1]):
+    def __init__(self, in_channel, style_dim):
         super().__init__()
-
-        if upsample:
-            self.upsample = Upsample(blur_kernel)
-
         self.conv = ModulatedConv2d(in_channel, 3, 1, style_dim, demodulate=False)
         self.bias = nn.Parameter(torch.zeros(1, 3, 1, 1))
 
@@ -358,12 +333,27 @@ class ToRGB(nn.Module):
         out = self.conv(input, style)
         out = out + self.bias
 
-        if skip is not None:
-            skip = self.upsample(skip)
+        return out
 
+class ToRGBUpsample(nn.Module):
+    def __init__(self, in_channel, style_dim, blur_kernel=[1, 3, 3, 1]):
+        super().__init__()
+
+        self.upsample = Upsample(blur_kernel)
+        self.conv = ModulatedConv2d(in_channel, 3, 1, style_dim, demodulate=False)
+        self.bias = nn.Parameter(torch.zeros(1, 3, 1, 1))
+
+    def forward(self, input, style, skip=None):
+        out = self.conv(input, style)
+        out = out + self.bias
+
+        if skip is not None: # True | False
+            # ==>pdb.set_trace()
+            skip = self.upsample(skip)
             out = out + skip
 
         return out
+    
     
 
 class Generator(nn.Module):
@@ -408,7 +398,7 @@ class Generator(nn.Module):
         self.conv1 = StyledConv(
             self.channels[4], self.channels[4], 3, style_dim, blur_kernel=blur_kernel
         )
-        self.to_rgb1 = ToRGB(self.channels[4], style_dim, upsample=False)
+        self.to_rgb1 = ToRGB(self.channels[4], style_dim)
 
         self.log_size = int(math.log(size, 2))
         self.num_layers = (self.log_size - 2) * 2 + 1
@@ -445,7 +435,7 @@ class Generator(nn.Module):
                 )
             )
 
-            self.to_rgbs.append(ToRGB(out_channel, style_dim))
+            self.to_rgbs.append(ToRGBUpsample(out_channel, style_dim))
 
             in_channel = out_channel
 
@@ -588,63 +578,3 @@ class ResBlock(nn.Module):
 
         return out
 
-    
-# class Discriminator(nn.Module):
-#     def __init__(self, size, channel_multiplier=2, blur_kernel=[1, 3, 3, 1]):
-#         super().__init__()
-
-#         channels = {
-#             4: 512,
-#             8: 512,
-#             16: 512,
-#             32: 512,
-#             64: 256 * channel_multiplier,
-#             128: 128 * channel_multiplier,
-#             256: 64 * channel_multiplier,
-#             512: 32 * channel_multiplier,
-#             1024: 16 * channel_multiplier,
-#         }
-
-#         convs = [ConvLayer(3, channels[size], 1)]
-
-#         log_size = int(math.log(size, 2))
-
-#         in_channel = channels[size]
-
-#         for i in range(log_size, 2, -1):
-#             out_channel = channels[2 ** (i - 1)]
-
-#             convs.append(ResBlock(in_channel, out_channel, blur_kernel))
-
-#             in_channel = out_channel
-
-#         self.convs = nn.Sequential(*convs)
-
-#         self.stddev_group = 4
-#         self.stddev_feat = 1
-
-#         self.final_conv = ConvLayer(in_channel + 1, channels[4], 3)
-#         self.final_linear = nn.Sequential(
-#             EqualLinear(channels[4] * 4 * 4, channels[4], activation='fused_lrelu'),
-#             EqualLinear(channels[4], 1),
-#         )
-
-#     def forward(self, input):
-#         out = self.convs(input)
-
-#         batch, channel, height, width = out.shape
-#         group = min(batch, self.stddev_group)
-#         stddev = out.view(
-#             group, -1, self.stddev_feat, channel // self.stddev_feat, height, width
-#         )
-#         stddev = torch.sqrt(stddev.var(0, unbiased=False) + 1e-8)
-#         stddev = stddev.mean([2, 3, 4], keepdims=True).squeeze(2)
-#         stddev = stddev.repeat(group, 1, height, width)
-#         out = torch.cat([out, stddev], 1)
-
-#         out = self.final_conv(out)
-
-#         out = out.view(batch, -1)
-#         out = self.final_linear(out)
-
-#         return out

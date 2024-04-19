@@ -57,7 +57,6 @@ def set_encoder_args(base_dir, pretrained_dir, idx_k):
         'stylegan_model_path': '',
         'w_mean_path': '',
         'arcface_model_path': '',
-        'parsing_model_path': '',
         'log_path': '',
         'checkpoint': ''
     }
@@ -67,7 +66,6 @@ def set_encoder_args(base_dir, pretrained_dir, idx_k):
     opts['stylegan_model_path'] = f"{pretrained_dir}/stylegan2-pytorch/sg2-lhq-1024.pt"
     opts['w_mean_path'] = f"{pretrained_dir}/stylegan2-pytorch/sg2-lhq-1024-mean.pt"
     opts['arcface_model_path'] = f"{pretrained_dir}/backbone.pth"
-    opts['parsing_model_path'] = f"{pretrained_dir}/79999_iter.pth"
     
     from argparse import Namespace
     opts = Namespace(**opts)
@@ -80,7 +78,6 @@ def set_encoder_args(base_dir, pretrained_dir, idx_k):
     #     stylegan_model_path='./pretrained_models/stylegan2-pytorch/sg2-lhq-1024.pt', 
     #     w_mean_path='./pretrained_models/stylegan2-pytorch/sg2-lhq-1024-mean.pt', 
     #     arcface_model_path='./pretrained_models/backbone.pth', 
-    #     parsing_model_path='./pretrained_models/79999_iter.pth', 
     #     log_path='./pretrained_models/logs/lhq_k10', checkpoint='', idx_k=10)
 
     return opts, config
@@ -93,12 +90,12 @@ def load_fs_encoder(opts, config):
     from trainerx import Trainer # rename train.py ==> trainx.py
     
     trainer = Trainer(config, opts)
-    trainer.initialize(opts.stylegan_model_path, opts.arcface_model_path, opts.parsing_model_path, opts.w_mean_path)   
-    # trainer.initialize(opts.stylegan_model_path, opts.w_mean_path)   
-    trainer.to(device)
-    
+    trainer.initialize(opts.w_mean_path)   
     trainer.load_model(opts.log_path)
     trainer.enc.eval() # fs_encoder_v2(...)
+
+    trainer.to(device)
+
     # (Pdb) opts.log_path -- './pretrained_models/logs/lhq_k10'
 
     return trainer
