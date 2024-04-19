@@ -4,7 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 
 from utils.joint_splatting import joint_splatting, backwarp
-
+import todos
+import pdb
 
 def euler_integration(motion, destination_frame, return_all_frames=False):
     """
@@ -15,6 +16,10 @@ def euler_integration(motion, destination_frame, return_all_frames=False):
     :param return_all_frames: Return the displacement maps to all intermediate frames, not only the last frame.
     :return: The displacement map resulting from repeated integration of the motion field.
     """
+
+    # tensor [motion] size: [1, 2, 224, 224], min: -0.024374, max: 0.242733, mean: 0.046427
+    # destination_frame = 0
+    # return_all_frames = False
 
     assert (motion.dim() == 4)
     b, c, height, width = motion.shape
@@ -29,10 +34,10 @@ def euler_integration(motion, destination_frame, return_all_frames=False):
     destination_coords = coord.clone().float().cuda()
     motion = motion.cuda()
 
-    if return_all_frames:
+    if return_all_frames: # False
+        pdb.set_trace()
         displacements = torch.zeros(destination_frame + 1, 2, height, width, device='cuda')
         visible_pixels = torch.ones(b + 1, 1, height, width, device='cuda')
-
     else:
         displacements = torch.zeros(1, 2, height, width, device='cuda')
         visible_pixels = torch.ones(1, 1, height, width, device='cuda')
@@ -51,7 +56,7 @@ def euler_integration(motion, destination_frame, return_all_frames=False):
         destination_coords[invalid_mask.expand_as(destination_coords)] = coord[
             invalid_mask.expand_as(destination_coords)].float()
 
-        if return_all_frames:
+        if return_all_frames: # False
             displacements[frame_id] = (destination_coords - coord.float()).unsqueeze(0)
         else:
             displacements = (destination_coords - coord.float()).unsqueeze(0)
@@ -68,7 +73,7 @@ def pad_tensor(tensor, mode="reflect", number=None):
     if mode=="reflect":
         pad = torch.nn.ReflectionPad2d(pad_size)
         padded_tensor = pad(tensor)    
-    elif mode=="constant":
+    elif mode=="constant": # False
         padded_tensor = torch.nn.functional.pad(tensor, pad, "constant", number)
 
     return padded_tensor
@@ -129,13 +134,15 @@ def resize_flow(flow, size):
 
 
 def blend_feature(feature, flow, idx, n_frames):
-    
+    # idx = 0
+    # n_frames = 120
+
+    # feature.size() -- [1, 256, 128, 128] or [1, 1, 128, 128] or [1, 128, 256, 256] ...
     size = feature.size(2)
     pad_size = int(size / 2)
     alpha = idx / (n_frames - 1)
     
     cut_size = 0
-    
     if feature.size(2) == 1024:
         cut_size = 3
     elif feature.size(2) == 512:
@@ -146,6 +153,8 @@ def blend_feature(feature, flow, idx, n_frames):
     if not cut_size == 0:
         feature = feature[:,:,cut_size:-cut_size,cut_size:-cut_size]
         flow = flow[:,:,cut_size:-cut_size,cut_size:-cut_size]
+    else:
+        pass # ==> pdb.set_trace()
         
     ### Reflection padding for flow
     future_flow = pad_tensor(flow, mode="reflect").float().cuda()
@@ -334,6 +343,8 @@ def _compute_outside_dists(height, width, dists, flags, band, radius):
 
 # computes pixels distances to initial mask contour, flags, and narrow band queue
 def _init(height, width, mask, radius):
+    pdb.set_trace()
+
     # init all distances to infinity
     dists = np.full((height, width), INF, dtype=float)
     # status of each pixel, ie KNOWN, BAND or UNKNOWN
@@ -369,6 +380,8 @@ def _init(height, width, mask, radius):
 
 # returns RGB values for pixel to by inpainted, computed for its neighborhood
 def _inpaint_pixel(y, x, img, height, width, dists, flags, radius, dim=3):
+    pdb.set_trace()
+    
     dist = dists[y, x]
     # normal to pixel, ie direction of propagation of the FFM
     dist_grad_y, dist_grad_x = _pixel_gradient(y, x, height, width, dists, flags)
@@ -424,6 +437,8 @@ def _inpaint_pixel(y, x, img, height, width, dists, flags, radius, dim=3):
 
 # main inpainting function
 def inpaint(img, mask, radius=5, dim=3):
+    pdb.set_trace()
+
     if img.shape[0:2] != mask.shape[0:2]:
         raise ValueError("Image and mask dimensions do not match")
 
@@ -473,6 +488,8 @@ def inpaint(img, mask, radius=5, dim=3):
             
             
 def feature_inpaint(feature, flow, idx, n_frames, mode="full"):
+    pdb.set_trace()
+
     size = feature.size(2)
     bn_feature = torch.ones(1, 1, size, size)
     flow = resize_flow(flow, size)
@@ -483,6 +500,8 @@ def feature_inpaint(feature, flow, idx, n_frames, mode="full"):
     blank_mask = torch.where(warped_bn_feature==0., 1., 0.).squeeze(0)
     
     if blank_mask.max() == 1.:
+        pdb.set_trace()
+
         feature = feature * (1 - blank_mask)
         blank_mask = blank_mask.squeeze(0).detach().cpu().numpy()
         fill_feature = feature.squeeze(0).permute(1, 2, 0).detach().cpu().numpy().copy()
@@ -512,7 +531,7 @@ def feature_inpaint_conv(feature, flow, idx, n_frames):
     full_mask = 1 - blank_mask
 
     if blank_mask.max() == 1.:
-
+        # ==> pdb.set_trace()
         ### make kernel
         weights = torch.ones(1, 1, 7, 7).cuda() / 49
         filtered = torch.zeros_like(feature)

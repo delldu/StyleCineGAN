@@ -2,28 +2,28 @@ import torch
 import numpy as np
 
 
-def z_score_filtering(flow):
+# def z_score_filtering(flow):
     
-    mag = flow.norm(dim=1, keepdim=True)
-    mag = mag.cpu().detach().numpy()
+#     mag = flow.norm(dim=1, keepdim=True)
+#     mag = mag.cpu().detach().numpy()
     
-    mag[mag == 0] = np.nan
-    mean = np.nanmean(mag)
-    std = np.nanstd(mag)
-    
-    
-    mag_tensor = flow.norm(dim=1, keepdim=True)
-    z_score = (mag_tensor - mean) / std
-    
-    z_score = z_score.cpu().detach().numpy()
-    out_mask = np.where(np.absolute(z_score) > 3, 0, 1)
-    out_mask = torch.from_numpy(out_mask).cuda()
+#     mag[mag == 0] = np.nan
+#     mean = np.nanmean(mag)
+#     std = np.nanstd(mag)
     
     
-    out_flow = out_mask * flow
+#     mag_tensor = flow.norm(dim=1, keepdim=True)
+#     z_score = (mag_tensor - mean) / std
+    
+#     z_score = z_score.cpu().detach().numpy()
+#     out_mask = np.where(np.absolute(z_score) > 3, 0, 1)
+#     out_mask = torch.from_numpy(out_mask).cuda()
     
     
-    return out_flow
+#     out_flow = out_mask * flow
+    
+    
+#     return out_flow
 
 
 def flow2img(flow_data):

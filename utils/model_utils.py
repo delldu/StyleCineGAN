@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
 device_ids = [0]
 device = torch.device('cuda')
-
+import pdb
 
 def load_stylegan2(ckpt_dir, channel_multiplier=2):
     '''
@@ -20,14 +20,15 @@ def load_stylegan2(ckpt_dir, channel_multiplier=2):
     from models.stylegan2.model import Generator
     g_ema = Generator(1024, 512, 8, channel_multiplier=channel_multiplier)
     g_ckpt = torch.load(ckpt_dir)
-    
+    # ckpt_dir ---- './pretrained_models/stylegan2-pytorch/sg2-lhq-1024.pt'
+
     g_ema.load_state_dict(g_ckpt["g_ema"])
     g_ema = g_ema.eval().cuda()
     g_ema = nn.DataParallel(g_ema, device_ids=device_ids)
     
     print(">>> Loading done ------------------ \n")
-    
-    return g_ema
+
+    return g_ema # g_ema.size() -- 127M
 
 
 def load_encoder(ckpt_dir, encoder_type='fs', recon_idx=10):
@@ -61,57 +62,57 @@ def load_encoder(ckpt_dir, encoder_type='fs', recon_idx=10):
         return net
     
     
-def load_flownet(ckpt_dir, mode="sky"):
+# def load_flownet(ckpt_dir, mode="sky"):
     
-    print(">>> Loading flownet-pix2pixhd...")
+#     print(">>> Loading flownet-pix2pixhd...")
     
-    from models.img2flow.pix2pixHD_model import InferenceModel
-    sky_model = None
-    fluid_model = None
+#     from models.img2flow.pix2pixHD_model import InferenceModel
+#     sky_model = None
+#     fluid_model = None
     
-    if (mode == "sky") or (mode == "sky+fluid"):
-        sky_model = InferenceModel()
-        opt = flownet_options(ckpt_dir, flownet_mode="sky")
+#     if (mode == "sky") or (mode == "sky+fluid"):
+#         sky_model = InferenceModel()
+#         opt = flownet_options(ckpt_dir, flownet_mode="sky")
         
-        sky_model.initialize(opt)
-        sky_model = sky_model.eval().cuda()
-        sky_model = nn.DataParallel(sky_model, device_ids=device_ids)
+#         sky_model.initialize(opt)
+#         sky_model = sky_model.eval().cuda()
+#         sky_model = nn.DataParallel(sky_model, device_ids=device_ids)
         
-    if (mode == "fluid") or (mode == "sky+fluid"):
-        fluid_model = InferenceModel()
-        opt = flownet_options(ckpt_dir, flownet_mode="fluid")
+#     if (mode == "fluid") or (mode == "sky+fluid"):
+#         fluid_model = InferenceModel()
+#         opt = flownet_options(ckpt_dir, flownet_mode="fluid")
         
-        fluid_model.initialize(opt)
-        fluid_model = fluid_model.eval().cuda()
-        fluid_model = nn.DataParallel(fluid_model, device_ids=device_ids)
+#         fluid_model.initialize(opt)
+#         fluid_model = fluid_model.eval().cuda()
+#         fluid_model = nn.DataParallel(fluid_model, device_ids=device_ids)
         
-    print(">>> Loading done ------------------ \n")
+#     print(">>> Loading done ------------------ \n")
     
-    return sky_model, fluid_model
+#     return sky_model, fluid_model
 
 
-def load_datasetgan(ckpt_dir, n_model=10, numpy_class=3):
+# def load_datasetgan(ckpt_dir, n_model=10, numpy_class=3):
     
-    print(">>> Loading datasetGAN-mask...")
+#     print(">>> Loading datasetGAN-mask...")
     
-    device_ids = [0]
-    from models.DatasetGAN.classifier import pixel_classifier
-    ckpt_dir = "./pretrained_models/datasetgan"
+#     device_ids = [0]
+#     from models.DatasetGAN.classifier import pixel_classifier
+#     ckpt_dir = "./pretrained_models/datasetgan"
     
-    classifier_list = []
-    for i in range(n_model):
-        classifier = pixel_classifier(numpy_class=numpy_class, dim=1472)
-        classifier = nn.DataParallel(classifier, device_ids=device_ids).cuda()
+#     classifier_list = []
+#     for i in range(n_model):
+#         classifier = pixel_classifier(numpy_class=numpy_class, dim=1472)
+#         classifier = nn.DataParallel(classifier, device_ids=device_ids).cuda()
 
-        ckpt = torch.load(f"{ckpt_dir}/best_model_number_{i}.pth")
-        classifier.load_state_dict(ckpt['model_state_dict'], strict=False)
-        classifier.eval()
+#         ckpt = torch.load(f"{ckpt_dir}/best_model_number_{i}.pth")
+#         classifier.load_state_dict(ckpt['model_state_dict'], strict=False)
+#         classifier.eval()
         
-        classifier_list.append(classifier)
+#         classifier_list.append(classifier)
   
-    print(">>> Loading done ------------------ \n")
+#     print(">>> Loading done ------------------ \n")
     
-    return classifier_list
+#     return classifier_list
 
 
 # -----------------------------------------------------------------------------------------
@@ -146,6 +147,13 @@ def set_encoder_args(base_dir, pretrained_dir, idx_k):
     config = yaml.load(open(f'{fs_dir}/configs/' + opts.config + '.yaml', 'r'), Loader=yaml.FullLoader)
     opts.idx_k = config['idx_k']
     
+    # Namespace(config='lhq_k10', real_dataset_path='', dataset_path='', label_path='', 
+    #     stylegan_model_path='./pretrained_models/stylegan2-pytorch/sg2-lhq-1024.pt', 
+    #     w_mean_path='./pretrained_models/stylegan2-pytorch/sg2-lhq-1024-mean.pt', 
+    #     arcface_model_path='./pretrained_models/backbone.pth', 
+    #     parsing_model_path='./pretrained_models/79999_iter.pth', 
+    #     log_path='./pretrained_models/logs/lhq_k10', checkpoint='', idx_k=10)
+
     return opts, config
 
 
@@ -153,15 +161,16 @@ def load_fs_encoder(opts, config):
     
     import sys
     sys.path.append("./external_modules/feature_style_encoder")
-    from trainer import Trainer
+    from trainerx import Trainer # rename train.py ==> trainx.py
     
     trainer = Trainer(config, opts)
     trainer.initialize(opts.stylegan_model_path, opts.arcface_model_path, opts.parsing_model_path, opts.w_mean_path)   
     trainer.to(device)
     
     trainer.load_model(opts.log_path)
-    trainer.enc.eval()
-    
+    trainer.enc.eval() # fs_encoder_v2(...)
+    # (Pdb) opts.log_path -- './pretrained_models/logs/lhq_k10'
+
     return trainer
 
         

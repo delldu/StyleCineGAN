@@ -7,7 +7,7 @@ from torch.nn import functional as F
 import sys, os
 sys.path.append("..")
 from models.stylegan2.op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d
-
+import pdb
 
 def get_keys(d, name):
 	if 'state_dict' in d:
@@ -100,7 +100,8 @@ class EqualConv2d(nn.Module):
             self, in_channel, out_channel, kernel_size, stride=1, padding=0, bias=True
     ):
         super().__init__()
-
+        pdb.set_trace()
+        
         self.weight = nn.Parameter(
             torch.randn(out_channel, in_channel, kernel_size, kernel_size)
         )
@@ -368,8 +369,7 @@ class ToRGB(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(
-            self,
+    def __init__(self,
             size,
             style_dim,
             n_mlp,
@@ -378,7 +378,14 @@ class Generator(nn.Module):
             lr_mlp=0.01,
     ):
         super().__init__()
-
+        # ====> pdb.set_trace()
+        # size = 1024
+        # style_dim = 512
+        # n_mlp = 8
+        # channel_multiplier = 2
+        # blur_kernel = [1, 3, 3, 1]
+        # lr_mlp = 0.01
+        
         self.size = size
 
         self.style_dim = style_dim
@@ -454,6 +461,8 @@ class Generator(nn.Module):
         self.n_latent = self.log_size * 2 - 2
 
     def make_noise(self):
+        pdb.set_trace()
+
         device = self.input.input.device
 
         noises = [torch.randn(1, 1, 2 ** 2, 2 ** 2, device=device)]
@@ -464,16 +473,16 @@ class Generator(nn.Module):
 
         return noises
 
-    def mean_latent(self, n_latent):
-        latent_in = torch.randn(
-            n_latent, self.style_dim, device=self.input.input.device
-        )
-        latent = self.style(latent_in).mean(0, keepdim=True)
+    # def mean_latent(self, n_latent):
+    #     latent_in = torch.randn(
+    #         n_latent, self.style_dim, device=self.input.input.device
+    #     )
+    #     latent = self.style(latent_in).mean(0, keepdim=True)
 
-        return latent
+    #     return latent
 
-    def get_latent(self, input):
-        return self.style(input)
+    # def get_latent(self, input):
+    #     return self.style(input)
     
     def forward(
             self,
@@ -489,6 +498,7 @@ class Generator(nn.Module):
             features_in=None,
             feature_scale=1.0
     ):
+        # ====> pdb.set_trace()
         if not input_is_latent:
             styles = [self.style(s) for s in styles]
 
@@ -549,16 +559,13 @@ class Generator(nn.Module):
         ):  
 
             out = insert_feature(out, i)
-#             print(f'out {i}', out.shape)
             out = conv1(out, latent[:, i], noise=noise1)
             outs.append(out)
 
             out = insert_feature(out, i+1 )
-#             print(f'out {i+1}', out.shape)
             out = conv2(out, latent[:, i + 1], noise=noise2)
             outs.append(out)
             skip = to_rgb(out, latent[:, i + 2], skip)
-#             print("---> out ", out.shape, )
             i += 2
 
         image = skip

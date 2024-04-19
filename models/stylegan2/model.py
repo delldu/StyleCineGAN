@@ -6,7 +6,7 @@ from torch.nn import functional as F
 
 from models.stylegan2.op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d
 from utils.cinemagraph_utils import warp_one_level
-
+import pdb
 
 class PixelNorm(nn.Module):
     def __init__(self):
@@ -30,7 +30,11 @@ def make_kernel(k):
 class Upsample(nn.Module):
     def __init__(self, kernel, factor=2):
         super().__init__()
-
+        # kernel = tensor([[0.062500, 0.187500, 0.187500, 0.062500],
+        #         [0.187500, 0.562500, 0.562500, 0.187500],
+        #         [0.187500, 0.562500, 0.562500, 0.187500],
+        #         [0.062500, 0.187500, 0.187500, 0.062500]])
+        # factor = 2
         self.factor = factor
         kernel = make_kernel(kernel) * (factor ** 2)
         self.register_buffer('kernel', kernel)
@@ -40,7 +44,8 @@ class Upsample(nn.Module):
         pad0 = (p + 1) // 2 + factor - 1
         pad1 = p // 2
 
-        self.pad = (pad0, pad1)
+        self.pad = (pad0, pad1) # === (2, 1) ?
+        # ==> pdb.set_trace()
 
     def forward(self, input):
         out = upfirdn2d(input, self.kernel, up=self.factor, down=1, pad=self.pad)
@@ -146,7 +151,7 @@ class EqualLinear(nn.Module):
         self.lr_mul = lr_mul
 
     def forward(self, input):
-        if self.activation:
+        if self.activation: # True
             out = F.linear(input, self.weight * self.scale)
             out = fused_leaky_relu(out, self.bias * self.lr_mul)
 
@@ -364,11 +369,10 @@ class ToRGB(nn.Module):
     
 
 class Generator(nn.Module):
-    def __init__(
-            self,
-            size,
-            style_dim,
-            n_mlp,
+    def __init__(self,
+            size=1024,
+            style_dim=512,
+            n_mlp=8,
             channel_multiplier=2,
             blur_kernel=[1, 3, 3, 1],
             lr_mlp=0.01,
@@ -449,125 +453,125 @@ class Generator(nn.Module):
 
         self.n_latent = self.log_size * 2 - 2
 
-    def make_noise(self):
-        device = self.input.input.device
+    # def make_noise(self):
+    #     device = self.input.input.device
 
-        noises = [torch.randn(1, 1, 2 ** 2, 2 ** 2, device=device)]
+    #     noises = [torch.randn(1, 1, 2 ** 2, 2 ** 2, device=device)]
 
-        for i in range(3, self.log_size + 1):
-            for _ in range(2):
-                noises.append(torch.randn(1, 1, 2 ** i, 2 ** i, device=device))
+    #     for i in range(3, self.log_size + 1):
+    #         for _ in range(2):
+    #             noises.append(torch.randn(1, 1, 2 ** i, 2 ** i, device=device))
 
-        return noises
+    #     return noises
 
-    def mean_latent(self, n_latent):
-        latent_in = torch.randn(
-            n_latent, self.style_dim, device=self.input.input.device
-        )
-        latent = self.style(latent_in).mean(0, keepdim=True)
+    # def mean_latent(self, n_latent):
+    #     latent_in = torch.randn(
+    #         n_latent, self.style_dim, device=self.input.input.device
+    #     )
+    #     latent = self.style(latent_in).mean(0, keepdim=True)
 
-        return latent
+    #     return latent
 
-    def get_latent(self, input):
-        return self.style(input)
+    # def get_latent(self, input):
+    #     return self.style(input)
 
-    def feature_forward(
-            self,
-            styles,
-            feature,
-            return_latents=False,
-            inject_index=None,
-            truncation=1,
-            truncation_latent=None,
-            input_is_latent=False,
-            noise=None,
-            randomize_noise=True,
-    ):
+    # def feature_forward(
+    #         self,
+    #         styles,
+    #         feature,
+    #         return_latents=False,
+    #         inject_index=None,
+    #         truncation=1,
+    #         truncation_latent=None,
+    #         input_is_latent=False,
+    #         noise=None,
+    #         randomize_noise=True,
+    # ):
         
-        styles_features = []
+    #     styles_features = []
         
-        if not input_is_latent:
-            styles = [self.style(s) for s in styles]
+    #     if not input_is_latent:
+    #         styles = [self.style(s) for s in styles]
 
-        if noise is None:
-            if randomize_noise:
-                noise = [None] * self.num_layers
-            else:
-                noise = [
-                    getattr(self.noises, f'noise_{i}') for i in range(self.num_layers)
-                ]
+    #     if noise is None:
+    #         if randomize_noise:
+    #             noise = [None] * self.num_layers
+    #         else:
+    #             noise = [
+    #                 getattr(self.noises, f'noise_{i}') for i in range(self.num_layers)
+    #             ]
 
-        if truncation < 1:
-            style_t = []
+    #     if truncation < 1:
+    #         style_t = []
 
-            for style in styles:
-                style_t.append(
-                    truncation_latent + truncation * (style - truncation_latent)
-                )
+    #         for style in styles:
+    #             style_t.append(
+    #                 truncation_latent + truncation * (style - truncation_latent)
+    #             )
 
-            styles = style_t
+    #         styles = style_t
 
-        if len(styles) < 2:
-            inject_index = self.n_latent
+    #     if len(styles) < 2:
+    #         inject_index = self.n_latent
 
-            if styles[0].ndim < 3:
-                latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
-            else:
-                latent = styles[0]
+    #         if styles[0].ndim < 3:
+    #             latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
+    #         else:
+    #             latent = styles[0]
 
-        else:
-            if inject_index is None:
-                inject_index = random.randint(1, self.n_latent - 1)
+    #     else:
+    #         if inject_index is None:
+    #             inject_index = random.randint(1, self.n_latent - 1)
 
-            latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
-            latent2 = styles[1].unsqueeze(1).repeat(1, self.n_latent - inject_index, 1)
+    #         latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
+    #         latent2 = styles[1].unsqueeze(1).repeat(1, self.n_latent - inject_index, 1)
 
-            latent = torch.cat([latent, latent2], 1)
+    #         latent = torch.cat([latent, latent2], 1)
 
-        out = self.input(latent)
-        out = self.conv1(out, latent[:, 0], noise=noise[0])
-        skip = self.to_rgb1(out, latent[:, 1])
+    #     out = self.input(latent)
+    #     out = self.conv1(out, latent[:, 0], noise=noise[0])
+    #     skip = self.to_rgb1(out, latent[:, 1])
 
-        replaced = False
+    #     replaced = False
 
-        i = 1
-        for conv1, conv2, noise1, noise2, to_rgb in zip(
-                self.convs[::2], self.convs[1::2], noise[1::2], noise[2::2], self.to_rgbs
-        ):
+    #     i = 1
+    #     for conv1, conv2, noise1, noise2, to_rgb in zip(
+    #             self.convs[::2], self.convs[1::2], noise[1::2], noise[2::2], self.to_rgbs
+    #     ):
 
-            if not replaced:
+    #         if not replaced:
 
-                out = conv1(out, latent[:, i], noise=noise1)
-                out = conv2(out, latent[:, i + 1], noise=noise2)
+    #             out = conv1(out, latent[:, i], noise=noise1)
+    #             out = conv2(out, latent[:, i + 1], noise=noise2)
                 
-            if replaced:
+    #         if replaced:
 
-                out = conv1(out, latent[:, i], noise=noise1)
-                styles_features.append(out)
+    #             out = conv1(out, latent[:, i], noise=noise1)
+    #             styles_features.append(out)
                 
-                out = conv2(out, latent[:, i + 1], noise=noise2)
-                styles_features.append(out)
+    #             out = conv2(out, latent[:, i + 1], noise=noise2)
+    #             styles_features.append(out)
                 
-                skip = to_rgb(out, latent[:, i+2], skip)
+    #             skip = to_rgb(out, latent[:, i+2], skip)
 
-            if out.size() == feature.size():
+    #         if out.size() == feature.size():
 
-                G_k = out
-                out = feature
+    #             G_k = out
+    #             out = feature
                 
-                styles_features.append(out)
+    #             styles_features.append(out)
                 
-                skip = to_rgb(out, latent[:, i + 2])
-                replaced = True
+    #             skip = to_rgb(out, latent[:, i + 2])
+    #             replaced = True
 
-            i += 2
+    #         i += 2
 
-        image = skip
+    #     image = skip
 
-        if return_latents:
-            return image, latent, feature, styles_features
-        else:
-            return image, None
+    #     if return_latents:
+    #         return image, latent, feature, styles_features
+    #     else:
+    #         return image, None
         
         
     def warp_blend_feature(
@@ -586,24 +590,26 @@ class Generator(nn.Module):
         inject_index=None,
         truncation=1,
         truncation_latent=None,
-        input_is_latent=False,
+        input_is_latent=True,
         noise=None,
         randomize_noise=False,
         is_random=False
     ):
-        
-        if not input_is_latent:
+        if not input_is_latent: # False
+            pdb.set_trace()
             styles = [self.style(s) for s in styles]
 
-        if noise is None:
-            if randomize_noise:
+        if noise is None: # True
+            if randomize_noise: # False
+                pdb.set_trace()
                 noise = [None] * self.num_layers
-            else:
+            else: # True
                 noise = [
-                    getattr(self.noises, f'noise_{i}') for i in range(self.num_layers)
+                    getattr(self.noises, f'noise_{i}') for i in range(self.num_layers) # self.num_layers -- 17
                 ]
 
-        if truncation_latent is not None:
+        if truncation_latent is not None: # False
+            pdb.set_trace()
             if truncation < 1:
                 style_t = []
 
@@ -614,16 +620,18 @@ class Generator(nn.Module):
 
                 styles = style_t
 
-        if len(styles) < 2:
-            inject_index = self.n_latent
-
-            if styles[0].ndim < 3:
+        if len(styles) < 2: # True for len(styles) === 1
+            inject_index = self.n_latent # 18
+            # styles[0].size() -- [1, 18, 512]
+            if styles[0].ndim < 3: # False
+                pdb.set_trace()
                 latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
             else:
                 latent = styles[0]
-
         else:
-            if inject_index is None:
+            pdb.set_trace()
+
+            if inject_index is None: # True
                 inject_index = random.randint(1, self.n_latent - 1)
 
             latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
@@ -637,7 +645,7 @@ class Generator(nn.Module):
         skip = self.to_rgb1(out, latent[:, 1])
         
         
-        replaced = False
+        # replaced = False
         blur_kernel = torch.tensor([1, 3, 3, 1]).cuda()
         
         
@@ -695,93 +703,93 @@ class Generator(nn.Module):
             image = skip
         
         
-        if return_latents:
+        if return_latents: # True
             return image, latent
         else:
             return image, None
         
         
-    def return_forward(
-            self,
-            styles,
-            return_latents=False,
-            return_features=False,
-            inject_index=None,
-            truncation=1,
-            truncation_latent=None,
-            input_is_latent=False,
-            noise=None,
-            randomize_noise=True,
-    ):
+    # def return_forward(
+    #         self,
+    #         styles,
+    #         return_latents=False,
+    #         return_features=False,
+    #         inject_index=None,
+    #         truncation=1,
+    #         truncation_latent=None,
+    #         input_is_latent=False,
+    #         noise=None,
+    #         randomize_noise=True,
+    # ):
         
-        styles_features = []
+    #     styles_features = []
         
-        if not input_is_latent:
-            styles = [self.style(s) for s in styles]
+    #     if not input_is_latent:
+    #         styles = [self.style(s) for s in styles]
 
-        if noise is None:
-            if randomize_noise:
-                noise = [None] * self.num_layers
-            else:
-                noise = [
-                    getattr(self.noises, f'noise_{i}') for i in range(self.num_layers)
-                ]
+    #     if noise is None:
+    #         if randomize_noise:
+    #             noise = [None] * self.num_layers
+    #         else:
+    #             noise = [
+    #                 getattr(self.noises, f'noise_{i}') for i in range(self.num_layers)
+    #             ]
 
-        if truncation < 1:
-            style_t = []
+    #     if truncation < 1:
+    #         style_t = []
 
-            for style in styles:
-                style_t.append(
-                    truncation_latent + truncation * (style - truncation_latent)
-                )
+    #         for style in styles:
+    #             style_t.append(
+    #                 truncation_latent + truncation * (style - truncation_latent)
+    #             )
 
-            styles = style_t
+    #         styles = style_t
 
-        if len(styles) < 2:
-            inject_index = self.n_latent
+    #     if len(styles) < 2:
+    #         inject_index = self.n_latent
 
-            if styles[0].ndim < 3:
-                latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
-            else:
-                latent = styles[0]
+    #         if styles[0].ndim < 3:
+    #             latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
+    #         else:
+    #             latent = styles[0]
 
-        else:
-            if inject_index is None:
-                inject_index = random.randint(1, self.n_latent - 1)
+    #     else:
+    #         if inject_index is None:
+    #             inject_index = random.randint(1, self.n_latent - 1)
 
-            latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
-            latent2 = styles[1].unsqueeze(1).repeat(1, self.n_latent - inject_index, 1)
+    #         latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
+    #         latent2 = styles[1].unsqueeze(1).repeat(1, self.n_latent - inject_index, 1)
 
-            latent = torch.cat([latent, latent2], 1)
+    #         latent = torch.cat([latent, latent2], 1)
 
-        out = self.input(latent)
-        out = self.conv1(out, latent[:, 0], noise=noise[0])
-        styles_features.append(out)
+    #     out = self.input(latent)
+    #     out = self.conv1(out, latent[:, 0], noise=noise[0])
+    #     styles_features.append(out)
 
-        skip = self.to_rgb1(out, latent[:, 1])
+    #     skip = self.to_rgb1(out, latent[:, 1])
 
-        i = 1
-        for conv1, conv2, noise1, noise2, to_rgb in zip(
-                self.convs[::2], self.convs[1::2], noise[1::2], noise[2::2], self.to_rgbs
-        ):
-            out = conv1(out, latent[:, i], noise=noise1)
-            styles_features.append(out)
+    #     i = 1
+    #     for conv1, conv2, noise1, noise2, to_rgb in zip(
+    #             self.convs[::2], self.convs[1::2], noise[1::2], noise[2::2], self.to_rgbs
+    #     ):
+    #         out = conv1(out, latent[:, i], noise=noise1)
+    #         styles_features.append(out)
             
-            out = conv2(out, latent[:, i + 1], noise=noise2)
-            styles_features.append(out)
+    #         out = conv2(out, latent[:, i + 1], noise=noise2)
+    #         styles_features.append(out)
             
-            skip = to_rgb(out, latent[:, i + 2], skip)
+    #         skip = to_rgb(out, latent[:, i + 2], skip)
 
-            i += 2
+    #         i += 2
 
-        image = skip
+    #     image = skip
 
-        if return_latents:
-            return image, latent
-        elif return_features:
-            return image, styles_features
-        else:
-            return image, None
+    #     if return_latents:
+    #         return image, latent
+    #     elif return_features:
+    #         return image, styles_features
+    #     else:
+    #         return image, None
         
     def forward(
             self,
@@ -795,6 +803,8 @@ class Generator(nn.Module):
             noise=None,
             randomize_noise=True,
     ):
+        pdb.set_trace()
+        
         if not input_is_latent:
             styles = [self.style(s) for s in styles]
 
@@ -928,62 +938,62 @@ class ResBlock(nn.Module):
         return out
 
     
-class Discriminator(nn.Module):
-    def __init__(self, size, channel_multiplier=2, blur_kernel=[1, 3, 3, 1]):
-        super().__init__()
+# class Discriminator(nn.Module):
+#     def __init__(self, size, channel_multiplier=2, blur_kernel=[1, 3, 3, 1]):
+#         super().__init__()
 
-        channels = {
-            4: 512,
-            8: 512,
-            16: 512,
-            32: 512,
-            64: 256 * channel_multiplier,
-            128: 128 * channel_multiplier,
-            256: 64 * channel_multiplier,
-            512: 32 * channel_multiplier,
-            1024: 16 * channel_multiplier,
-        }
+#         channels = {
+#             4: 512,
+#             8: 512,
+#             16: 512,
+#             32: 512,
+#             64: 256 * channel_multiplier,
+#             128: 128 * channel_multiplier,
+#             256: 64 * channel_multiplier,
+#             512: 32 * channel_multiplier,
+#             1024: 16 * channel_multiplier,
+#         }
 
-        convs = [ConvLayer(3, channels[size], 1)]
+#         convs = [ConvLayer(3, channels[size], 1)]
 
-        log_size = int(math.log(size, 2))
+#         log_size = int(math.log(size, 2))
 
-        in_channel = channels[size]
+#         in_channel = channels[size]
 
-        for i in range(log_size, 2, -1):
-            out_channel = channels[2 ** (i - 1)]
+#         for i in range(log_size, 2, -1):
+#             out_channel = channels[2 ** (i - 1)]
 
-            convs.append(ResBlock(in_channel, out_channel, blur_kernel))
+#             convs.append(ResBlock(in_channel, out_channel, blur_kernel))
 
-            in_channel = out_channel
+#             in_channel = out_channel
 
-        self.convs = nn.Sequential(*convs)
+#         self.convs = nn.Sequential(*convs)
 
-        self.stddev_group = 4
-        self.stddev_feat = 1
+#         self.stddev_group = 4
+#         self.stddev_feat = 1
 
-        self.final_conv = ConvLayer(in_channel + 1, channels[4], 3)
-        self.final_linear = nn.Sequential(
-            EqualLinear(channels[4] * 4 * 4, channels[4], activation='fused_lrelu'),
-            EqualLinear(channels[4], 1),
-        )
+#         self.final_conv = ConvLayer(in_channel + 1, channels[4], 3)
+#         self.final_linear = nn.Sequential(
+#             EqualLinear(channels[4] * 4 * 4, channels[4], activation='fused_lrelu'),
+#             EqualLinear(channels[4], 1),
+#         )
 
-    def forward(self, input):
-        out = self.convs(input)
+#     def forward(self, input):
+#         out = self.convs(input)
 
-        batch, channel, height, width = out.shape
-        group = min(batch, self.stddev_group)
-        stddev = out.view(
-            group, -1, self.stddev_feat, channel // self.stddev_feat, height, width
-        )
-        stddev = torch.sqrt(stddev.var(0, unbiased=False) + 1e-8)
-        stddev = stddev.mean([2, 3, 4], keepdims=True).squeeze(2)
-        stddev = stddev.repeat(group, 1, height, width)
-        out = torch.cat([out, stddev], 1)
+#         batch, channel, height, width = out.shape
+#         group = min(batch, self.stddev_group)
+#         stddev = out.view(
+#             group, -1, self.stddev_feat, channel // self.stddev_feat, height, width
+#         )
+#         stddev = torch.sqrt(stddev.var(0, unbiased=False) + 1e-8)
+#         stddev = stddev.mean([2, 3, 4], keepdims=True).squeeze(2)
+#         stddev = stddev.repeat(group, 1, height, width)
+#         out = torch.cat([out, stddev], 1)
 
-        out = self.final_conv(out)
+#         out = self.final_conv(out)
 
-        out = out.view(batch, -1)
-        out = self.final_linear(out)
+#         out = out.view(batch, -1)
+#         out = self.final_linear(out)
 
-        return out
+#         return out

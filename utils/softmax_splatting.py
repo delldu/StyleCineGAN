@@ -4,6 +4,7 @@ import torch
 
 import cupy
 import re
+import pdb
 
 kernel_Softsplat_updateOutput = '''
 	extern "C" __global__ void kernel_Softsplat_updateOutput(
@@ -325,37 +326,38 @@ class _FunctionSoftsplat(torch.autograd.Function):
 def FunctionSoftsplat(tensorInput, tensorFlow, tensorMetric, strType, output_size=None):
     assert (tensorMetric is None or tensorMetric.shape[1] == 1)
     assert (strType in ['summation', 'average', 'linear', 'softmax'])
-
-    if strType == 'average':
+	# strType = 'linear'
+	# output_size = torch.Size([224, 224])
+    if strType == 'average': # False
+        pdb.set_trace()
         tensorInput = torch.cat(
             [tensorInput, tensorInput.new_ones(tensorInput.shape[0], 1, tensorInput.shape[2], tensorInput.shape[3])], 1)
-
     elif strType == 'linear':
         tensorInput = torch.cat([tensorInput * tensorMetric, tensorMetric], 1)
-
-    elif strType == 'softmax':
+    elif strType == 'softmax': # False
+        pdb.set_trace()
         tensorInput = torch.cat([tensorInput * tensorMetric.exp(), tensorMetric.exp()], 1)
 
     tensorOutput = _FunctionSoftsplat.apply(tensorInput, tensorFlow)
 
-    if strType != 'summation':
+    if strType != 'summation': # True
         tenSplattedMetric = tensorOutput[:, -1:, :, :]
         tenSplattedMetric[tenSplattedMetric == 0] = 1
         tensorOutput = tensorOutput[:, :-1, :, :] / tenSplattedMetric
 
-    if output_size is not None:
+    if output_size is not None: # True
         tensorOutput = tensorOutput[:, :, :output_size[0], :output_size[1]]
 
     return tensorOutput
 
 
-class ModuleSoftsplat(torch.nn.Module):
-    def __init__(self, strType):
-        super(ModuleSoftsplat, self).__init__()
+# class ModuleSoftsplat(torch.nn.Module):
+#     def __init__(self, strType):
+#         super(ModuleSoftsplat, self).__init__()
 
-        self.strType = strType
+#         self.strType = strType
 
-    def forward(self, tensorInput, tensorFlow, tensorMetric, output_size=None):
-        return FunctionSoftsplat(tensorInput, tensorFlow, tensorMetric, self.strType, output_size)
+#     def forward(self, tensorInput, tensorFlow, tensorMetric, output_size=None):
+#         return FunctionSoftsplat(tensorInput, tensorFlow, tensorMetric, self.strType, output_size)
 
 

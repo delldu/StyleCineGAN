@@ -10,7 +10,7 @@ from scipy.ndimage import zoom
 from tqdm import tqdm
 import lpips
 import os
-
+import pdb
 
 class Trainer():
     def name(self):
@@ -37,6 +37,8 @@ class Trainer():
             version - 0.1 for latest, 0.0 was original (with a bug)
             gpu_ids - int array - [0] by default, gpus to use
         '''
+        pdb.set_trace()
+
         self.use_gpu = use_gpu
         self.gpu_ids = gpu_ids
         self.model = model
