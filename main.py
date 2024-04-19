@@ -61,19 +61,20 @@ if __name__ == "__main__":
     
     # invert the image ------------------------------------------------------------------------------
     with torch.no_grad():
-        tensor_recon, latent, feature = gan_inversion(encoder, torch_input)
-    # tensor [tensor_recon] size: [1, 3, 1024, 1024], min: -1.422519, max: 1.449161, mean: 0.109709
+        # tensor_recon, latent, feature = gan_inversion(encoder, torch_input)
+        latent, feature = gan_inversion(encoder, torch_input)
+
     # tensor [latent] size: [1, 18, 512], min: -15.776832, max: 11.293081, mean: 0.022378
     # tensor [feature] size: [1, 256, 128, 128], min: -4.576892, max: 4.600057, mean: 0.402872
 
     torch_input = to_tensor(torch_input)
         
     # visualize inversion results -------------------------------------------------------------------
-    if opts.vis == "True": # True
-        img_list = [torch_input, tensor_recon]
-        img_list = [to_numpy(resize_tensor(img, [512,512]))[0] for img in img_list]
-        img_list = np.concatenate(img_list, axis=1)
-        mp.write_image(f"{opts.save_dir}/{basename_input}_recon.png", img_list)
+    # if opts.vis == "True": # True
+    #     img_list = [torch_input, tensor_recon]
+    #     img_list = [to_numpy(resize_tensor(img, [512,512]))[0] for img in img_list]
+    #     img_list = np.concatenate(img_list, axis=1)
+    #     mp.write_image(f"{opts.save_dir}/{basename_input}_recon.png", img_list)
     
     
     # load flow ----------------------------------------------------------------------------------

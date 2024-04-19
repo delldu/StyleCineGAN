@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 sys.path.append('pixel2style2pixel/')
-from pixel2style2pixel.models.stylegan2.model import P2S2PGenerator, get_keys
+# from pixel2style2pixel.models.stylegan2.model import P2S2PGenerator, get_keys
 
 
 from nets.feature_style_encoder import fs_encoder_v2
@@ -19,13 +19,13 @@ def downscale(x, scale_times=1, mode='bilinear'):
 
 class Trainer(nn.Module):
     def __init__(self, config, opts):
-        super(Trainer, self).__init__()
+        super().__init__()
         # Load Hyperparameters
         self.config = config
         self.device = torch.device(self.config['device'])
         self.scale = int(np.log2(config['resolution']/config['enc_resolution'])) # 2
         self.n_styles = 2 * int(np.log2(config['resolution'])) - 2
-        self.idx_k = 10
+        # self.idx_k = 10
 
         # Networks
         enc_residual = False
@@ -44,7 +44,7 @@ class Trainer(nn.Module):
         
 
         ##########################
-        self.StyleGAN = P2S2PGenerator(1024, 512, 8)
+        # self.StyleGAN = P2S2PGenerator(1024, 512, 8)
 
     def initialize(self, stylegan_model_path, arcface_model_path, parsing_model_path, w_mean_path):
         # load StyleGAN model
@@ -53,29 +53,30 @@ class Trainer(nn.Module):
         # parsing_model_path = './pretrained_models/79999_iter.pth'
         # w_mean_path = './pretrained_models/stylegan2-pytorch/sg2-lhq-1024-mean.pt'
 
-        state_dict = torch.load(stylegan_model_path)
-        self.StyleGAN.load_state_dict(state_dict["g_ema"])
-        self.StyleGAN.to(self.device)
+        # state_dict = torch.load(stylegan_model_path)
+        # self.StyleGAN.load_state_dict(state_dict["g_ema"])
+        # self.StyleGAN.to(self.device)
         with torch.no_grad():
             self.dlatent_avg = torch.load(w_mean_path).to(self.device)
 
     def get_image(self, img=None):
         x_1 = img
         # Reconstruction
-        k = self.idx_k # === 10
+        # k = self.idx_k # === 10
         w_recon, fea = self.enc(downscale(x_1, self.scale, 'bilinear')) 
         w_recon = w_recon + self.dlatent_avg
-        features = [None]*k + [fea] + [None]*(17-k)
+        # features = [None]*k + [fea] + [None]*(17-k)
 
         # generate image
-        x_1_recon, fea_recon = self.StyleGAN([w_recon], features_in=features)
-        fea_recon = fea_recon[k].detach()
-        return [x_1_recon, x_1[:,:3,:,:], w_recon, fea, fea_recon]
+        # img_recon, fea_recon = self.StyleGAN([w_recon], features_in=features)
+        # fea_recon = fea_recon[k].detach()
+        # return [img_recon, w_recon, fea]
+        return [w_recon, fea]
 
     def test(self, img=None):        
         out = self.get_image(img=img)
-        x_1_recon, x_1, w_recon, fea_1 = out[:4]
-        output = [x_1, x_1_recon, w_recon, fea_1]
+        w_recon, fea = out[:2]
+        output = [w_recon, fea]
         return output
 
     def load_model(self, log_dir):

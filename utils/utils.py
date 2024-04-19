@@ -23,5 +23,6 @@ def gan_inversion(encoder, img):
 
     feature = output.pop()
     latent = output.pop()
-    result = output.pop()
-    return result, latent, feature   
+    # result = output.pop()
+    # return result, latent, feature 
+    return latent, feature 
