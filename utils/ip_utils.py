@@ -46,13 +46,13 @@ def to_numpy(x, norm=True):
     return x
 
 
-def to_im(var):
-	var = var.cpu().detach().transpose(0, 2).transpose(0, 1).numpy()
-	var = ((var + 1) / 2)
-	var[var < 0] = 0
-	var[var > 1] = 1
-	var = var * 255
-	return Image.fromarray(var.astype('uint8'))
+# def to_im(var):
+# 	var = var.cpu().detach().transpose(0, 2).transpose(0, 1).numpy()
+# 	var = ((var + 1) / 2)
+# 	var[var < 0] = 0
+# 	var[var > 1] = 1
+# 	var = var * 255
+# 	return Image.fromarray(var.astype('uint8'))
 
 
 def crop_image(x):
@@ -81,108 +81,4 @@ def crop_image(x):
 
             x = x[pos1:pos2,:]
     return x
-
-
-class Interpolate(nn.Module):
-    def __init__(self, size, mode, align_corners=False):
-        super(Interpolate, self).__init__()
-        self.interp = nn.functional.interpolate
-        self.size = size
-        self.mode = mode
-        self.align_corners = align_corners
-
-    def forward(self, x):
-        if self.align_corners:
-            x = self.interp(x, size=self.size, mode=self.mode, align_corners=False)
-        else:
-            x = self.interp(x, size=self.size, mode=self.mode)
-        return x
-
-
-# def make_sg2_features(sg2, latent):
-
-#     out_res = 512
-    
-#     ### Setup feature upsamplers
-#     mode = 'bilinear'
-#     upsamplers = [nn.Upsample(scale_factor=out_res / 4, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 8, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 8, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 16, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 16, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 32, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 32, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 64, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 64, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 128, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 128, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 256, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 256, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 512, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 512, mode=mode)]
-
-#     upsamplers.append(Interpolate(512, mode))
-#     upsamplers.append(Interpolate(512, mode))
-    
-    
-#     with torch.no_grad():
-        
-#         ### Make sg2 features
-#         _, affine_layers = sg2.module.return_forward([latent],
-#                                               input_is_latent=True,
-#                                               randomize_noise=False,
-#                                               return_latents=False,
-#                                               return_features=True
-#                                              )
-
-#         feature_maps = []
-#         for i in range(len(affine_layers)):
-#             feature_maps.append(upsamplers[i](affine_layers[i]))
-
-#         feature_maps_all = torch.cat(feature_maps, dim=1)
-#         feature_maps_all = feature_maps_all.permute(0, 2, 3, 1)
-#         feature_maps_all = feature_maps_all.reshape(-1, 5568).float().cuda()
-
-#         return feature_maps_all
-    
-    
-# def make_sg2_features_fs(sg2, latent, feature):
-
-#     out_res = 512
-    
-#     ### Setup feature upsamplers
-#     mode = 'bilinear'
-#     upsamplers = [nn.Upsample(scale_factor=out_res / 64, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 128, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 128, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 256, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 256, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 512, mode=mode),
-#                   nn.Upsample(scale_factor=out_res / 512, mode=mode)]
-
-#     upsamplers.append(Interpolate(512, mode))
-#     upsamplers.append(Interpolate(512, mode))
-    
-    
-#     with torch.no_grad():
-        
-#         sg2.to(latent.device)
-        
-#         ### Make sg2 features
-#         _, _, _, affine_layers = sg2.module.feature_forward([latent],
-#                                                      feature,
-#                                                      input_is_latent=True,
-#                                                      randomize_noise=False,
-#                                                      return_latents=True
-#                                                     )
-
-#         feature_maps = []
-#         for i in range(len(affine_layers)):
-#             feature_maps.append(upsamplers[i](affine_layers[i]))
-
-#         feature_maps_all = torch.cat(feature_maps, dim=1)
-#         feature_maps_all = feature_maps_all.permute(0, 2, 3, 1)
-#         feature_maps_all = feature_maps_all.reshape(-1, 1472).float().cuda()
-
-#         return feature_maps_all
 

@@ -3,24 +3,18 @@ from tqdm import tqdm
 import mediapy as mp
 import numpy as np
 import os
-import cv2
-
-from PIL import Image
 
 import warnings
 warnings.filterwarnings(action='ignore')
 
-
 device = torch.device('cuda')
-
 
 from option import Options
 from utils.model_utils import load_encoder, load_stylegan2
-from utils.ip_utils import read_image, resize_tensor, to_numpy, to_tensor #, make_sg2_features_fs #, make_sg2_features
+from utils.ip_utils import read_image, resize_tensor, to_numpy, to_tensor
 from utils.utils import gan_inversion #,clip_img, predict_mask
-from utils.flow_utils import flow2img # , z_score_filtering
+from utils.flow_utils import flow2img
 from utils.cinemagraph_utils import feature_inpaint, resize_flow, resize_feature
-from torchvision.transforms import GaussianBlur
 
 import todos
 import pdb
@@ -48,16 +42,6 @@ if __name__ == "__main__":
     #     style_interp=False, style_extrapolate_scale=2.0, mode='full', recon_feature_idx=9, 
     #     warp_feature_idx=9, vis='True', image_inpainting=False, no_image_composit=False, device=device(type='cuda'))
 
-    # from PIL import Image
-    # dotarrow_tensor = read_image(f"dotarrow.png", dim=128)
-    # dotarrow_tensor = torch.where(dotarrow_tensor > 0.9, torch.zeros_like(dotarrow_tensor), dotarrow_tensor)
-    # # dotarrow_tensor = torch.where(dotarrow_tensor < 0.1, torch.zeros_like(dotarrow_tensor), dotarrow_tensor)
-    # T = GaussianBlur(kernel_size=(5, 5), sigma=(5, 5))
-    # dotarrow_tensor = T(dotarrow_tensor)
-    # todos.debug.output_tensor(dotarrow_tensor)
-
-
-    
     # load models ------------------------------------------------------------------------------------
     sg2      = load_stylegan2(opts.sg2_ckpt)
     # sg2 -- DataParallel((module): Generator(...))
@@ -74,10 +58,6 @@ if __name__ == "__main__":
     # './samples/0002268/0002268.png'
     # tensor [torch_input] size: [1, 3, 1024, 1024], min: -1.0, max: 1.0, mean: 0.110929
     
-    if opts.style_path: # None
-        torch_style = read_image(opts.style_path, is_square=True, return_tensor=True)
-        basename_style = os.path.basename(opts.style_path).split('.')[0]
-    
     
     # invert the image ------------------------------------------------------------------------------
     with torch.no_grad():
@@ -86,26 +66,11 @@ if __name__ == "__main__":
     # tensor [latent] size: [1, 18, 512], min: -15.776832, max: 11.293081, mean: 0.022378
     # tensor [feature] size: [1, 256, 128, 128], min: -4.576892, max: 4.600057, mean: 0.402872
 
-    if opts.style_path: # None
-        pdb.set_trace()
-        mean_latent = sg2.mean_latent(10000)
-        mean_latent = mean_latent.detach()
-        torch_style = to_tensor(torch_style)
-        
-        # invert the style image via optimization
-        from optimize_latent import OptimizeLatent
-        optim_latents = OptimizeLatent(opts, sg2, threshold=opts.optim_threshold)
-        tensor_recon_style, latent_style = optim_latents.optimize_latent(torch_style, mean_latent, step=1500,
-                                                                         initial_lr=opts.initial_lr,
-                                                                         optim_params='latent')
     torch_input = to_tensor(torch_input)
         
     # visualize inversion results -------------------------------------------------------------------
     if opts.vis == "True": # True
         img_list = [torch_input, tensor_recon]
-        if opts.style_path: # None
-            img_list += [torch_style, tensor_recon_style]
-        
         img_list = [to_numpy(resize_tensor(img, [512,512]))[0] for img in img_list]
         img_list = np.concatenate(img_list, axis=1)
         mp.write_image(f"{opts.save_dir}/{basename_input}_recon.png", img_list)
@@ -142,21 +107,13 @@ if __name__ == "__main__":
     
     # get alphas
     alphas = torch.ones(opts.n_frames, 1).to(device)
-    if opts.style_interp: # False
-        alphas = get_alphas(opts.n_frames, opts.style_extrapolate_scale)
 
     frames = []
     with torch.no_grad():
         latents = []
 
-        # get all latents
-        if opts.style_interp: # False
-            for alpha in alphas:
-                input_latent = latent_style * alpha +  latent * (1 - alpha)
-                latents.append(input_latent)
-        else: # True
-            for alpha in alphas:
-                latents.append(latent) # latent.size() -- [1, 18, 512]
+        for alpha in alphas:
+            latents.append(latent) # latent.size() -- [1, 18, 512]
     
         # todos.debug.output_var("latents", latents)
         # latents is list: len = 120
@@ -164,8 +121,8 @@ if __name__ == "__main__":
         # tensor [feature] size: [1, 256, 128, 128], min: -4.576892, max: 4.600057, mean: 0.402872
         # tensor [flow] size: [1, 2, 512, 512], min: -0.942374, max: 0.936256, mean: -0.108493
 
-        # up_mask = resize_feature(mask.float(), 1024)
-        # up_flow = resize_flow(flow, 1024)
+        up_mask = resize_feature(mask.float(), 1024)
+        up_flow = resize_flow(flow, 1024)
     
         # generate frames
         pbar = tqdm(total=len(latents))
@@ -188,11 +145,11 @@ if __name__ == "__main__":
             # todos.debug.output_var("result", result)
             # tensor [result] size: [1, 3, 1024, 1024], min: -0.278078, max: -0.139095, mean: -0.248583            
             
-            up_mask = resize_feature(mask.float(), 1024)
-            up_flow = resize_flow(flow, 1024)
+            # up_mask = resize_feature(mask.float(), 1024)
+            # up_flow = resize_flow(flow, 1024)
             
-            if opts.image_inpainting: # False
-                result = feature_inpaint(result, up_flow, idx, opts.n_frames)
+            # if opts.image_inpainting: # False
+            #     result = feature_inpaint(result, up_flow, idx, opts.n_frames)
                 
             if not opts.no_image_composit: # True
                 result = result*up_mask + torch_input.cuda() * (1 - up_mask)

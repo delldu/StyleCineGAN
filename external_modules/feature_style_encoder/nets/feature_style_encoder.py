@@ -55,43 +55,47 @@ class fs_encoder_v2(nn.Module):
 
         self.idx_k = int(opts.idx_k)
         # self.idx_k -- 10
-        stride = stride
-        if  self.idx_k in [2,3]:
-            pdb.set_trace()
-            self.feat_size = 16
-            self.feat_ch = 512
-            self.in_feat = 512
-        elif  self.idx_k  in [4,5]:
-            pdb.set_trace()
-            self.feat_size = 16
-            self.feat_ch = 512
-            self.in_feat = 256
-        elif self.idx_k in [6,7]:
-            pdb.set_trace()
-            self.feat_size = 32
-            self.feat_ch = 512
-            self.in_feat = 128
-        elif self.idx_k in [8,9]:
-            pdb.set_trace()
-            self.feat_size = 64
-            self.feat_ch = 512
-            self.in_feat = 64
-        elif self.idx_k in [10,11]: # True
-            self.feat_size = 128
-            self.feat_ch = 256
-            self.in_feat = 64
-        elif self.idx_k in [12,13]:
-            pdb.set_trace()
-            stride = (1, 1)
-            self.feat_size = 256
-            self.feat_ch = 128
-            self.in_feat = 64
-        elif self.idx_k in [14,15]:
-            pdb.set_trace()
-            stride = (1, 1)
-            self.feat_size = 512
-            self.feat_ch = 64
-            self.in_feat = 64
+        # stride = stride
+        # if  self.idx_k in [2,3]:
+        #     pdb.set_trace()
+        #     self.feat_size = 16
+        #     self.feat_ch = 512
+        #     self.in_feat = 512
+        # # elif  self.idx_k  in [4,5]:
+        # #     pdb.set_trace()
+        # #     self.feat_size = 16
+        # #     self.feat_ch = 512
+        # #     self.in_feat = 256
+        # # elif self.idx_k in [6,7]:
+        # #     pdb.set_trace()
+        # #     self.feat_size = 32
+        # #     self.feat_ch = 512
+        # #     self.in_feat = 128
+        # # elif self.idx_k in [8,9]:
+        # #     pdb.set_trace()
+        # #     self.feat_size = 64
+        # #     self.feat_ch = 512
+        # #     self.in_feat = 64
+        # elif self.idx_k in [10,11]: # True
+        #     self.feat_size = 128
+        #     self.feat_ch = 256
+        #     self.in_feat = 64
+        # # elif self.idx_k in [12,13]:
+        # #     pdb.set_trace()
+        # #     stride = (1, 1)
+        # #     self.feat_size = 256
+        # #     self.feat_ch = 128
+        # #     self.in_feat = 64
+        # # elif self.idx_k in [14,15]:
+        # #     pdb.set_trace()
+        # #     stride = (1, 1)
+        # #     self.feat_size = 512
+        # #     self.feat_ch = 64
+        # #     self.in_feat = 64
+
+        self.feat_size = 128
+        self.feat_ch = 256
+        self.in_feat = 64
         
         self.content_layer = nn.Sequential(
             nn.BatchNorm2d(self.in_feat, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
@@ -113,23 +117,23 @@ class fs_encoder_v2(nn.Module):
             content = self.content_layer(x) # size = (batch_size, 256, 128, 128)
         x = self.block_1(x)  # torch.Size([batch_size, 64, 128, 128])
         
-        if self.idx_k in [8,9]:
-            pdb.set_trace()
-            content = self.content_layer(x) # size = (batch_size, 512, 64, 64)
+        # if self.idx_k in [8,9]:
+        #     pdb.set_trace()
+        #     content = self.content_layer(x) # size = (batch_size, 512, 64, 64)
         features.append(self.avg_pool(x))
         x = self.block_2(x)
 
         # print("block2", x.shape) # torch.Size([batch_size, 128, 64, 64])
-        if self.idx_k in [6,7]:
-            pdb.set_trace()
-            content = self.content_layer(x) # size = (batch_size, 512, 32, 32)
+        # if self.idx_k in [6,7]:
+        #     pdb.set_trace()
+        #     content = self.content_layer(x) # size = (batch_size, 512, 32, 32)
         features.append(self.avg_pool(x))
         x = self.block_3(x)
  
         # print("block3", x.shape) # torch.Size([batch_size, 256, 32, 32])
-        if  self.idx_k  in [4,5]:
-            pdb.set_trace()
-            content = self.content_layer(x) # size = (batch_size, 512, 16, 16)
+        # if  self.idx_k  in [4,5]:
+        #     pdb.set_trace()
+        #     content = self.content_layer(x) # size = (batch_size, 512, 16, 16)
         features.append(self.avg_pool(x))
         x = self.block_4(x)
         features.append(self.avg_pool(x))
@@ -139,33 +143,3 @@ class fs_encoder_v2(nn.Module):
             latents.append(self.styles[i](x))
         out = torch.stack(latents, dim=1)
         return out, content
-
-    
-# class StyleMod(nn.Module):
-#     def __init__(self, n_styles=18):
-#         super(StyleMod, self).__init__()  
-
-#         self.style_layers = nn.ModuleList()
-#         for i in range(n_styles):
-#             self.style_layers.append(LinearLayer())
-
-#     def forward(self, x):
-#         latents = []
-#         for i, style_layer in enumerate(self.style_layers):
-#             latents.append(style_layer(x[:,i,:]))
-#         out = torch.stack(latents, dim=1)
-#         return out
-
-# class LinearLayer(nn.Module):
-#     def __init__(self):
-#         super(LinearLayer, self).__init__()
-        
-#         layer = []
-#         layer.append(nn.Linear(512, 512))
-#         layer.append(nn.PReLU(num_parameters=512))
-#         layer.append(nn.Linear(512, 512))
-
-#         self.layer = nn.Sequential(*layer)
-
-#     def forward(self, x):
-#         return self.layer(x)
