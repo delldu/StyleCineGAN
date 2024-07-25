@@ -1,6 +1,6 @@
 import torch
 
-from utils.softmax_splatting import FunctionSoftsplat, pytorch_softsplat
+from utils.softmax_splatting import FunctionSoftsplat
 import todos
 import pdb
 
@@ -41,13 +41,22 @@ def joint_splatting(feature_map1, weights1, flow1,
     flow = torch.cat([flow1, flow2_offset], dim=-1)
     feature_map = torch.cat([feature_map1, feature_map2], dim=-1)
     blending_weights = torch.cat([weights1, weights2], dim=-1)
-    
+
     result_softsplat = FunctionSoftsplat(tensorInput=feature_map,
                                          tensorFlow=flow,
                                          tensorMetric=blending_weights,
                                          output_size=output_size)
 
-    # result_softsplat = pytorch_softsplat(feature_map, flow)
+    # todos.debug.output_var("feature_map", feature_map)
+    # todos.debug.output_var("flow", flow)
+    # todos.debug.output_var("blending_weights", blending_weights)
+    # todos.debug.output_var("result_softsplat", result_softsplat)
+    # print("-" * 80)
+    # tensor [feature_map] size: [1, 256, 224, 448], min: -1.265544, max: 10.693622, mean: 1.426945
+    # tensor [flow] size: [1, 2, 224, 448], min: -224.0, max: 24.74115, mean: -53.523159
+    # tensor [blending_weights] size: [1, 1, 224, 448], min: 0.0, max: 1.0, mean: 0.5
+    # tensor [result_softsplat] size: [1, 256, 224, 224], min: -1.265544, max: 10.693622, mean: 1.426945
+    # --------------------------------------------------------------------------------
 
     return result_softsplat
 

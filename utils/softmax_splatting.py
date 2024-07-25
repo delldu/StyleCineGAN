@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 import cupy
 import re
@@ -339,7 +340,10 @@ def FunctionSoftsplat(tensorInput, tensorFlow, tensorMetric, output_size=None):
     assert (tensorMetric is None or tensorMetric.shape[1] == 1)
     tensorInput = torch.cat([tensorInput * tensorMetric, tensorMetric], 1)
     tensorOutput = _FunctionSoftsplat.apply(tensorInput, tensorFlow)
-    # tensorOutput = tensorInput
+
+    # xxxx_3333
+    # tensorOutput = softsplat(tensorInput[0].cpu().numpy(), tensorFlow[0].cpu().numpy())
+    # tensorOutput = torch.from_numpy(tensorOutput).cuda().unsqueeze(0)
 
     tenSplattedMetric = tensorOutput[:, -1:, :, :]
     tenSplattedMetric[tenSplattedMetric == 0] = 1
@@ -366,29 +370,67 @@ def FunctionSoftsplat(tensorInput, tensorFlow, tensorMetric, output_size=None):
 
     return tensorOutput
 
+def softsplat(input, flow):
+    """
+    对输入图像进行softsplat操作，根据光流场flow重投影特征。
+    
+    参数:
+    - input: 输入图像或特征图，形状为(channels, height, width)
+    - flow: 光流场，形状为(2, height, width)，其中第一维是x和y方向的速度
+    
+    返回:
+    - output: 重投影后的特征图，形状与input相同
+    """
+    channels, height, width = input.shape
+    output = np.zeros_like(input)  # 初始化输出特征图
+    
+    # 计算输出特征图的索引网格
+    Y, X = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
+    
+    # 应用光流场，计算重投影坐标
+    X_reproj = X + flow[0]
+    Y_reproj = Y + flow[1]
+    
+    # 四舍五入到最近的整数坐标
+    X_int = np.floor(X_reproj).astype(int)
+    Y_int = np.floor(Y_reproj).astype(int)
+    
+    # 计算分数部分
+    X_frac = X_reproj - X_int
+    Y_frac = Y_reproj - Y_int
+    
+    # 检查边界条件
+    X_int = np.clip(X_int, 0, width - 1)
+    Y_int = np.clip(Y_int, 0, height - 1)
+    
+    # 计算四个最近邻的坐标
+    X_nw = np.clip(X_int - 1, 0, width - 1)
+    Y_nw = np.clip(Y_int - 1, 0, height - 1)
+    X_ne = np.clip(X_int + 1, 0, width - 1)
+    Y_ne = np.clip(Y_int - 1, 0, height - 1)
+    X_sw = np.clip(X_int - 1, 0, width - 1)
+    Y_sw = np.clip(Y_int + 1, 0, height - 1)
+    X_se = np.clip(X_int + 1, 0, width - 1)
+    Y_se = np.clip(Y_int + 1, 0, height - 1)
+    
+    # 计算双线性插值权重
+    w_nw = (1 - X_frac) * (1 - Y_frac)
+    w_ne = X_frac * (1 - Y_frac)
+    w_sw = (1 - X_frac) * Y_frac
+    w_se = X_frac * Y_frac
+    
+    # 重投影特征
+    for c in range(channels):
+        output[c] = (
+            w_nw * input[c, Y_nw, X_nw] +
+            w_ne * input[c, Y_ne, X_ne] +
+            w_sw * input[c, Y_sw, X_sw] +
+            w_se * input[c, Y_se, X_se]
+        )
+    
+    return output
 
-
-
-def pytorch_softsplat(input_tensor, flow):
-    batch_size, channels, height, width = input_tensor.shape
-    
-    # 将输入和光流调整为正确的形状
-    input_tensor = input_tensor.view(batch_size, channels, -1)
-    flow = flow.view(batch_size, 2, -1)
-    
-    # 为每个像素生成坐标
-    coords_y, coords_x = torch.meshgrid(torch.arange(height), torch.arange(width))
-    coords = torch.stack([coords_x.float(), coords_y.float()], dim=0).unsqueeze(0).repeat(batch_size, 1, 1, 1)
-    
-    # 应用光流
-    coords = coords + flow
-    
-    # 将坐标归一化到[0, 1]区间
-    coords[:, 0, :, :] = (coords[:, 0, :, :] / (width - 1)) * 2.0 - 1.0
-    coords[:, 1, :, :] = (coords[:, 1, :, :] / (height - 1)) * 2.0 - 1.0
-    
-    # 使用grid_sample进行双线性插值
-    output_tensor = F.grid_sample(input_tensor, coords, mode='bilinear', padding_mode='zeros')
-    
-    return output_tensor.view(batch_size, channels, height, width)
-
+# 示例使用
+# input = np.random.rand(3, 100, 100)  # 随机生成一个3通道的图像
+# flow = np.random.rand(2, 100, 100)   # 随机生成一个光流场
+# output = softsplat(input, flow)

@@ -10,6 +10,7 @@ sys.path.append('pixel2style2pixel/')
 
 
 from nets.feature_style_encoder import fs_encoder_v2
+import todos
 import pdb
 
 def downscale(x, scale_times=1, mode='bilinear'):
@@ -41,11 +42,13 @@ class Trainer(nn.Module):
                                  stride=self.stride, # (2, 2)
                                 ) # Model Size() -- 427 M
         
-
+        # pdb.set_trace()
 
     def initialize(self, w_mean_path):
+        # w_mean_path -- './pretrained_models/stylegan2-pytorch/sg2-lhq-1024-mean.pt' -- 2.8K
         with torch.no_grad():
             self.dlatent_avg = torch.load(w_mean_path).to(self.device)
+
 
     def get_image(self, img=None):
         x_1 = img
@@ -61,5 +64,5 @@ class Trainer(nn.Module):
         return output
 
     def load_model(self, log_dir):
-        # pretrained_models/logs/lhq_k10/enc.pth.tar ????
+        # pretrained_models/logs/lhq_k10/enc.pth.tar -- 427M
         self.enc.load_state_dict(torch.load('{:s}/enc.pth.tar'.format(log_dir)))

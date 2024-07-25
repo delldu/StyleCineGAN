@@ -14,7 +14,7 @@ from utils.model_utils import load_encoder, load_stylegan2
 from utils.ip_utils import read_image, resize_tensor, to_numpy, to_tensor
 from utils.utils import gan_inversion
 from utils.flow_utils import flow2img
-from utils.cinemagraph_utils import resize_flow, resize_feature
+from utils.cinemagraph_utils import resize_flow, resize_mask
 
 import todos
 import pdb
@@ -38,6 +38,9 @@ if __name__ == "__main__":
     encoder  = load_encoder(opts.encoder_ckpt, recon_idx=opts.recon_feature_idx).to(device)
     # encoder -- Trainer((enc): fs_encoder_v2(...))
     # opts.encoder_ckpt -- './pretrained_models'
+    # torch.save(encoder.state_dict(), "/tmp/e.pth") # 427M
+
+
 
     # read images ------------------------------------------------------------------------------------
     basename_input = (opts.img_path).split("/")[-1]
@@ -108,14 +111,14 @@ if __name__ == "__main__":
         # tensor [feature] size: [1, 256, 128, 128], min: -4.576892, max: 4.600057, mean: 0.402872
         # tensor [flow] size: [1, 2, 512, 512], min: -0.942374, max: 0.936256, mean: -0.108493
 
-        up_mask = resize_feature(mask.float(), 1024)
+        up_mask = resize_mask(mask.float(), 1024)
         up_flow = resize_flow(flow, 1024)
     
         # generate frames
         pbar = tqdm(total=len(latents))
         for idx, input_latent in enumerate(latents):    
             result = sg2.module.forward(
-                        styles=[input_latent],
+                        input_latent,
                         feature=feature,
                         idx=idx,
                         n_frames=opts.n_frames,

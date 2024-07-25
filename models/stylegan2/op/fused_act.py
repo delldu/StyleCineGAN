@@ -4,6 +4,7 @@ import torch
 from torch import nn
 from torch.autograd import Function
 from torch.utils.cpp_extension import load
+import pdb
 
 module_path = os.path.dirname(__file__)
 fused = load(
@@ -76,10 +77,16 @@ class FusedLeakyReLU(nn.Module):
         self.bias = nn.Parameter(torch.zeros(channel))
         self.negative_slope = negative_slope
         self.scale = scale
+        # channel = 512
+        # negative_slope = 0.2
+        # scale = 1.4142135623730951
 
     def forward(self, input):
         return fused_leaky_relu(input, self.bias, self.negative_slope, self.scale)
 
 
 def fused_leaky_relu(input, bias, negative_slope=0.2, scale=2 ** 0.5):
+    # ==> pdb.set_trace()
+    # negative_slope = 0.2
+    # scale = 1.4142135623730951
     return FusedLeakyReLUFunction.apply(input, bias, negative_slope, scale)

@@ -1,5 +1,7 @@
 import torch
 from torch import nn
+import todos
+import pdb
 
 __all__ = ['iresnet18', 'iresnet34', 'iresnet50', 'iresnet100', 'iresnet200']
 
@@ -42,6 +44,7 @@ class IBasicBlock(nn.Module):
         self.bn3 = nn.BatchNorm2d(planes, eps=1e-05,)
         self.downsample = downsample
         self.stride = stride
+        # pdb.set_trace()
 
     def forward(self, x):
         identity = x
@@ -58,11 +61,22 @@ class IBasicBlock(nn.Module):
 
 
 class IResNet(nn.Module):
+    '''[3, 4, 14, 3] --- iresnet50'''
     fc_scale = 7 * 7
     def __init__(self,
                  block, layers, dropout=0, num_features=512, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None, fp16=False):
         super(IResNet, self).__init__()
+        # layers = [3, 4, 14, 3]
+        # dropout = 0
+        # num_features = 512
+        # zero_init_residual = False
+        # groups = 1
+        # width_per_group = 64
+        # replace_stride_with_dilation = [False, False, False]
+        # fp16 = False
+
+
         self.fp16 = fp16
         self.inplanes = 64
         self.dilation = 1
@@ -71,30 +85,35 @@ class IResNet(nn.Module):
         if len(replace_stride_with_dilation) != 3:
             raise ValueError("replace_stride_with_dilation should be None "
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
-        self.groups = groups
-        self.base_width = width_per_group
+        self.groups = groups # === 1
+        self.base_width = width_per_group # === 64
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(self.inplanes, eps=1e-05)
         self.prelu = nn.PReLU(self.inplanes)
-        self.layer1 = self._make_layer(block, 64, layers[0], stride=2)
+        self.layer1 = self._make_layer(block,
+                                       64, 
+                                       layers[0], # 3
+                                       stride=2,
+                                    )
         self.layer2 = self._make_layer(block,
                                        128,
-                                       layers[1],
+                                       layers[1], # 4
                                        stride=2,
                                        dilate=replace_stride_with_dilation[0])
         self.layer3 = self._make_layer(block,
                                        256,
-                                       layers[2],
+                                       layers[2], # 14
                                        stride=2,
                                        dilate=replace_stride_with_dilation[1])
         self.layer4 = self._make_layer(block,
                                        512,
-                                       layers[3],
+                                       layers[3], # 3
                                        stride=2,
                                        dilate=replace_stride_with_dilation[2])
         self.bn2 = nn.BatchNorm2d(512 * block.expansion, eps=1e-05,)
         self.dropout = nn.Dropout(p=dropout, inplace=True)
         self.fc = nn.Linear(512 * block.expansion * self.fc_scale, num_features)
+
         self.features = nn.BatchNorm1d(num_features, eps=1e-05)
         nn.init.constant_(self.features.weight, 1.0)
         self.features.weight.requires_grad = False
@@ -106,17 +125,20 @@ class IResNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-        if zero_init_residual:
+        if zero_init_residual: # False
             for m in self.modules():
                 if isinstance(m, IBasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
+        # pdb.set_trace()
 
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         downsample = None
         previous_dilation = self.dilation
         if dilate:
+            pdb.set_trace()
             self.dilation *= stride
             stride = 1
+
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 conv1x1(self.inplanes, planes * block.expansion, stride),
@@ -154,12 +176,19 @@ class IResNet(nn.Module):
             x = self.bn2(x)
             x = torch.flatten(x, 1)
             x = self.dropout(x)
+
+        if self.fp16: # False
+            pdb.set_trace()
         x = self.fc(x.float() if self.fp16 else x)
+
         x = self.features(x)
         
-        if return_features:
+        if return_features: # False ?
+            pdb.set_trace()
+
             out.append(x)
             return out
+
         return x
 
 
