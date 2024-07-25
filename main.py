@@ -14,7 +14,7 @@ from utils.model_utils import load_encoder, load_stylegan2
 from utils.ip_utils import read_image, resize_tensor, to_numpy, to_tensor
 from utils.utils import gan_inversion
 from utils.flow_utils import flow2img
-from utils.cinemagraph_utils import feature_inpaint, resize_flow, resize_feature
+from utils.cinemagraph_utils import resize_flow, resize_feature
 
 import todos
 import pdb
@@ -34,10 +34,10 @@ if __name__ == "__main__":
     # sg2 -- DataParallel((module): Generator(...))
     # opts.sg2_ckpt -- './pretrained_models/stylegan2-pytorch/sg2-lhq-1024.pt'
 
+    # (Pdb) opts.log_path -- './pretrained_models/logs/lhq_k10'
     encoder  = load_encoder(opts.encoder_ckpt, recon_idx=opts.recon_feature_idx).to(device)
     # encoder -- Trainer((enc): fs_encoder_v2(...))
     # opts.encoder_ckpt -- './pretrained_models'
-    # opts.encoder_type -- 'fs', opts.recon_feature_idx -- 10    
 
     # read images ------------------------------------------------------------------------------------
     basename_input = (opts.img_path).split("/")[-1]
@@ -71,7 +71,6 @@ if __name__ == "__main__":
     # tensor [flow] size: [1, 2, 512, 512], min: -0.942374, max: 0.936256, mean: -0.108493
     # flow = -1.0 * flow
     print(">>> Done -------------------------- \n")
-    
     
     # load mask ----------------------------------------------------------------------------------
     print("\n>>> Loading Mask...")
@@ -121,8 +120,6 @@ if __name__ == "__main__":
                         idx=idx,
                         n_frames=opts.n_frames,
                         flow=flow, ###!!!!!!!!!!!!!!!!###
-                        recon_feature_idx=opts.recon_feature_idx,
-                        warp_feature_idx=opts.warp_feature_idx,
                     )
             
             # todos.debug.output_var("result", result)

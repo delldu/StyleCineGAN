@@ -62,7 +62,7 @@ def set_encoder_args(base_dir, pretrained_dir, idx_k):
     }
     
     opts['config'] = f"lhq_k{idx_k}"
-    opts['log_path'] = f"{pretrained_dir}/logs/{opts['config']}"
+    opts['log_path'] = './pretrained_models/logs/lhq_k10' # f"{pretrained_dir}/logs/{opts['config']}"
     opts['stylegan_model_path'] = f"{pretrained_dir}/stylegan2-pytorch/sg2-lhq-1024.pt"
     opts['w_mean_path'] = f"{pretrained_dir}/stylegan2-pytorch/sg2-lhq-1024-mean.pt"
     opts['arcface_model_path'] = f"{pretrained_dir}/backbone.pth"
@@ -72,7 +72,7 @@ def set_encoder_args(base_dir, pretrained_dir, idx_k):
     
     import yaml
     config = yaml.load(open(f'{fs_dir}/configs/' + opts.config + '.yaml', 'r'), Loader=yaml.FullLoader)
-    opts.idx_k = config['idx_k']
+    opts.idx_k = 10 # config['idx_k']
     
     # Namespace(config='lhq_k10', real_dataset_path='', dataset_path='', label_path='', 
     #     stylegan_model_path='./pretrained_models/stylegan2-pytorch/sg2-lhq-1024.pt', 

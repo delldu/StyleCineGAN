@@ -4,12 +4,9 @@ import torch.nn as nn
 import mediapy as mp
 from PIL import Image
 
-
 device = "cuda"
 
-
 def read_image(img_dir, dim=1024, is_square=True, return_tensor=True):
-    
     np_img = mp.read_image(img_dir)
     
     # crop to square
@@ -45,24 +42,12 @@ def to_numpy(x, norm=True):
     x = x.cpu().detach().numpy()
     return x
 
-
-# def to_im(var):
-# 	var = var.cpu().detach().transpose(0, 2).transpose(0, 1).numpy()
-# 	var = ((var + 1) / 2)
-# 	var[var < 0] = 0
-# 	var[var > 1] = 1
-# 	var = var * 255
-# 	return Image.fromarray(var.astype('uint8'))
-
-
 def crop_image(x):
     # crop image to square
     H, W, _ = x.shape
     
     if H != W:
-
         if H < W:
-
             pos1 = (W - H) / 2
             pos2 = (W + H) / 2
 
@@ -70,9 +55,7 @@ def crop_image(x):
             pos2 = int(pos2)
             
             x = x[:,pos1:pos2,:]
-
         elif H > W:
-
             pos1 = (H - W) / 2
             pos2 = (H + W) / 2
             

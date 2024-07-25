@@ -6,6 +6,8 @@ from torch.nn import functional as F
 
 from models.stylegan2.op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d
 from utils.cinemagraph_utils import warp_one_level
+
+import todos
 import pdb
 
 class PixelNorm(nn.Module):
@@ -189,6 +191,7 @@ class ModulatedConv2d(nn.Module):
             self.blur = Blur(blur_kernel, pad=(pad0, pad1), upsample_factor=factor)
 
         if downsample:
+            pdb.set_trace()
             factor = 2
             p = (len(blur_kernel) - factor) + (kernel_size - 1)
             pad0 = (p + 1) // 2
@@ -252,8 +255,6 @@ class ModulatedConv2d(nn.Module):
         else:
             input = input.view(1, batch * in_channel, height, width)
             out = F.conv2d(input, weight, padding=self.padding, groups=batch)
-
-            
 
             _, _, height, width = out.shape
             out = out.view(batch, self.out_channel, height, width)
@@ -366,13 +367,17 @@ class Generator(nn.Module):
             lr_mlp=0.01,
     ):
         super().__init__()
+        # size = 1024
+        # style_dim = 512
+        # n_mlp = 8
+        # channel_multiplier = 2
+        # blur_kernel = [1, 3, 3, 1]
+        # lr_mlp = 0.01
 
         self.size = size
-
         self.style_dim = style_dim
 
         layers = [PixelNorm()]
-
         for i in range(n_mlp):
             layers.append(
                 EqualLinear(
@@ -381,13 +386,25 @@ class Generator(nn.Module):
             )
 
         self.style = nn.Sequential(*layers)
+        # (Pdb) self.style
+        # Sequential(
+        #   (0): PixelNorm()
+        #   (1): EqualLinear(512, 512)
+        #   (2): EqualLinear(512, 512)
+        #   (3): EqualLinear(512, 512)
+        #   (4): EqualLinear(512, 512)
+        #   (5): EqualLinear(512, 512)
+        #   (6): EqualLinear(512, 512)
+        #   (7): EqualLinear(512, 512)
+        #   (8): EqualLinear(512, 512)
+        # )
 
         self.channels = {
             4: 512,
             8: 512,
             16: 512,
             32: 512,
-            64: 256 * channel_multiplier,
+            64: 256 * channel_multiplier, # channel_multiplier === 2
             128: 128 * channel_multiplier,
             256: 64 * channel_multiplier,
             512: 32 * channel_multiplier,
@@ -410,12 +427,12 @@ class Generator(nn.Module):
 
         in_channel = self.channels[4]
 
-        for layer_idx in range(self.num_layers):
+        for layer_idx in range(self.num_layers): # self.num_layers === 17
             res = (layer_idx + 5) // 2
             shape = [1, 1, 2 ** res, 2 ** res]
             self.noises.register_buffer(f'noise_{layer_idx}', torch.randn(*shape))
 
-        for i in range(3, self.log_size + 1):
+        for i in range(3, self.log_size + 1): # self.log_size === 10 ==> 3, 4, 5, 6, 7, 8, 9, 10
             out_channel = self.channels[2 ** i]
 
             self.convs.append(
@@ -439,9 +456,8 @@ class Generator(nn.Module):
 
             in_channel = out_channel
 
-        self.n_latent = self.log_size * 2 - 2
+        self.n_latent = self.log_size * 2 - 2 # self.n_latent === 18
 
-        
         
     def forward(self,
         styles,
@@ -449,11 +465,11 @@ class Generator(nn.Module):
         idx,
         n_frames,
         flow,
-        recon_feature_idx=10,
-        warp_feature_idx=10,
     ):
+        recon_feature_idx = 10
+
         noise = [
-            getattr(self.noises, f'noise_{i}') for i in range(self.num_layers) # self.num_layers -- 17
+            getattr(self.noises, f'noise_{i}') for i in range(self.num_layers) # self.num_layers === 17
         ]
 
         # styles[0].size() -- [1, 18, 512]
@@ -462,49 +478,31 @@ class Generator(nn.Module):
         out = self.input(latent)
         out = self.conv1(out, latent[:, 0], noise=noise[0])
         skip = self.to_rgb1(out, latent[:, 1])
+        # todos.debug.output_var("skip", skip)
+        # tensor [skip] size: [1, 3, 4, 4], min: -0.005031, max: 0.001965, mean: -0.001057
+
         
-        i = 1
-        for conv1, conv2, noise1, noise2, to_rgb in zip(
-                self.convs[::2], self.convs[1::2], \
-                noise[1::2], noise[2::2], \
-                self.to_rgbs
+        # len(self.convs) -- 16, len(self.to_rgbs) --- 8
+        i = 1 # ===> i = 1, 3, 5, 7, 9, 11, 13, 15
+        for conv1, conv2, noise1, noise2, to_rgb in zip(self.convs[::2], self.convs[1::2], 
+                noise[1::2], noise[2::2], self.to_rgbs
         ):
-            
-            assert(recon_feature_idx <= warp_feature_idx)
-            
-            if (i < recon_feature_idx) and (i+1 < recon_feature_idx):
-                out = conv1(out, latent[:,i], noise=noise1)
+            out = conv1(out, latent[:,i], noise=noise1)
+
+            if (i+1 < recon_feature_idx):
+                # ==> i = 1, 3, 5, 7
                 out = conv2(out, latent[:,i+1], noise=noise2)
+            elif i+1 == recon_feature_idx:
+                # ==> i == 9
+                out = feature
+                out = conv2(out, latent[:,i+1], noise=noise2)
+                out_ = warp_one_level(out, flow, idx, n_frames) # xxxx_debug 
+                skip = to_rgb(out_, latent[:,i+2], skip=None)
             else:
-                if i == recon_feature_idx:
-                    out = feature
-                    out = conv1(out, latent[:,i], noise=noise1)
-                else:
-                    out = conv1(out, latent[:,i], noise=noise1)
-
-                if i == warp_feature_idx:
-                    out_ = warp_one_level(out, flow, idx, n_frames)
-                    out_ = conv2(out_, latent[:,i+1], noise=noise2)
-                
-                
-                if i+1 == recon_feature_idx:
-                    out = feature
-                    out = conv2(out, latent[:,i+1], noise=noise2)
-
-                else:
-                    out = conv2(out, latent[:,i+1], noise=noise2)
-                    
-                    
-                if i+1 == warp_feature_idx:
-                    out_ = warp_one_level(out, flow, idx, n_frames)
-                    
-                    
-                if (i == warp_feature_idx) or (i+1 == warp_feature_idx):
-                    skip = to_rgb(out_, latent[:,i+2], skip=None)
-                
-                elif i > warp_feature_idx:
-                    out_ = warp_one_level(out, flow, idx, n_frames)
-                    skip = to_rgb(out_, latent[:,i+2], skip=skip)
+                # ==> i == 11, 13, 15
+                out = conv2(out, latent[:,i+1], noise=noise2)
+                out_ = warp_one_level(out, flow, idx, n_frames) # xxxx_debug 
+                skip = to_rgb(out_, latent[:,i+2], skip=skip)
                     
             i += 2
             image = skip

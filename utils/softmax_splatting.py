@@ -1,9 +1,12 @@
 # Adapted from https://github.com/sniklaus/softmax-splatting
 
 import torch
+import torch.nn.functional as F
 
 import cupy
 import re
+
+import todos
 import pdb
 
 kernel_Softsplat_updateOutput = '''
@@ -237,6 +240,7 @@ def cupy_launch(strFunction, strKernel):
 class _FunctionSoftsplat(torch.autograd.Function):
     @staticmethod
     def forward(self, input, flow):
+        # ==> pdb.set_trace()
         self.save_for_backward(input, flow)
 
         intSamples = input.shape[0]
@@ -267,10 +271,18 @@ class _FunctionSoftsplat(torch.autograd.Function):
         elif input.is_cuda == False:
             raise NotImplementedError()
 
+        # todos.debug.output_var("input",input)
+        # todos.debug.output_var("flow",flow)
+        # todos.debug.output_var("output",output)
+		# tensor [input] size: [1, 257, 224, 448], min: -1.265544, max: 10.693622, mean: 0.712642
+		# tensor [flow] size: [1, 2, 224, 448], min: -248.74115, max: 0.575409, mean: -58.517563
+		# tensor [output] size: [1, 257, 224, 448], min: -1.265544, max: 10.693622, mean: 0.712642
+
         return output
 
     @staticmethod
     def backward(self, gradOutput):
+        pdb.set_trace()
         input, flow = self.saved_tensors
 
         intSamples = input.shape[0]
@@ -323,41 +335,60 @@ class _FunctionSoftsplat(torch.autograd.Function):
         return gradInput, gradFlow
 
 
-def FunctionSoftsplat(tensorInput, tensorFlow, tensorMetric, strType, output_size=None):
+def FunctionSoftsplat(tensorInput, tensorFlow, tensorMetric, output_size=None):
     assert (tensorMetric is None or tensorMetric.shape[1] == 1)
-    assert (strType in ['summation', 'average', 'linear', 'softmax'])
-	# strType = 'linear'
-	# output_size = torch.Size([224, 224])
-    if strType == 'average': # False
-        pdb.set_trace()
-        tensorInput = torch.cat(
-            [tensorInput, tensorInput.new_ones(tensorInput.shape[0], 1, tensorInput.shape[2], tensorInput.shape[3])], 1)
-    elif strType == 'linear':
-        tensorInput = torch.cat([tensorInput * tensorMetric, tensorMetric], 1)
-    elif strType == 'softmax': # False
-        pdb.set_trace()
-        tensorInput = torch.cat([tensorInput * tensorMetric.exp(), tensorMetric.exp()], 1)
-
+    tensorInput = torch.cat([tensorInput * tensorMetric, tensorMetric], 1)
     tensorOutput = _FunctionSoftsplat.apply(tensorInput, tensorFlow)
+    # tensorOutput = tensorInput
 
-    if strType != 'summation': # True
-        tenSplattedMetric = tensorOutput[:, -1:, :, :]
-        tenSplattedMetric[tenSplattedMetric == 0] = 1
-        tensorOutput = tensorOutput[:, :-1, :, :] / tenSplattedMetric
+    tenSplattedMetric = tensorOutput[:, -1:, :, :]
+    tenSplattedMetric[tenSplattedMetric == 0] = 1
+    tensorOutput = tensorOutput[:, :-1, :, :] / tenSplattedMetric
 
-    if output_size is not None: # True
-        tensorOutput = tensorOutput[:, :, :output_size[0], :output_size[1]]
+    tensorOutput = tensorOutput[:, :, :output_size[0], :output_size[1]]
+
+	# tensor [FunctionSoftsplat: tensorInput] size: [1, 1, 888, 1776], min: 1.0, max: 1.0, mean: 1.0
+	# tensor [FunctionSoftsplat: tensorFlow] size: [1, 2, 888, 1776], min: -888.0, max: 99.450378, mean: -212.031052
+	# tensor [FunctionSoftsplat: tensorMetric] size: [1, 1, 888, 1776], min: 0.0, max: 1.0, mean: 0.5
+	# FunctionSoftsplat: output_size is tuple: len = 2
+	#     [item] value: '888'
+	#     [item] value: '888'
+	# tensor [FunctionSoftsplat: tensorOutput] size: [1, 1, 888, 888], min: 1.0, max: 1.0, mean: 1.0
+	# --------------------------------------------------------------------------------
+	# tensor [FunctionSoftsplat: tensorInput] size: [1, 32, 1780, 3560], min: -1.075294, max: 3.646587, mean: 0.008901
+	# tensor [FunctionSoftsplat: tensorFlow] size: [1, 2, 1780, 3560], min: -1780.0, max: 198.96228, mean: -424.981659
+	# tensor [FunctionSoftsplat: tensorMetric] size: [1, 1, 1780, 3560], min: 0.0, max: 1.0, mean: 0.5
+	# FunctionSoftsplat: output_size is tuple: len = 2
+	#     [item] value: '1780'
+	#     [item] value: '1780'
+	# tensor [FunctionSoftsplat: tensorOutput] size: [1, 32, 1780, 1780], min: -1.075294, max: 3.646587, mean: 0.008901
+	# --------------------------------------------------------------------------------
 
     return tensorOutput
 
 
-# class ModuleSoftsplat(torch.nn.Module):
-#     def __init__(self, strType):
-#         super(ModuleSoftsplat, self).__init__()
 
-#         self.strType = strType
 
-#     def forward(self, tensorInput, tensorFlow, tensorMetric, output_size=None):
-#         return FunctionSoftsplat(tensorInput, tensorFlow, tensorMetric, self.strType, output_size)
-
+def pytorch_softsplat(input_tensor, flow):
+    batch_size, channels, height, width = input_tensor.shape
+    
+    # 将输入和光流调整为正确的形状
+    input_tensor = input_tensor.view(batch_size, channels, -1)
+    flow = flow.view(batch_size, 2, -1)
+    
+    # 为每个像素生成坐标
+    coords_y, coords_x = torch.meshgrid(torch.arange(height), torch.arange(width))
+    coords = torch.stack([coords_x.float(), coords_y.float()], dim=0).unsqueeze(0).repeat(batch_size, 1, 1, 1)
+    
+    # 应用光流
+    coords = coords + flow
+    
+    # 将坐标归一化到[0, 1]区间
+    coords[:, 0, :, :] = (coords[:, 0, :, :] / (width - 1)) * 2.0 - 1.0
+    coords[:, 1, :, :] = (coords[:, 1, :, :] / (height - 1)) * 2.0 - 1.0
+    
+    # 使用grid_sample进行双线性插值
+    output_tensor = F.grid_sample(input_tensor, coords, mode='bilinear', padding_mode='zeros')
+    
+    return output_tensor.view(batch_size, channels, height, width)
 
