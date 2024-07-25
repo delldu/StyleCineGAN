@@ -72,17 +72,20 @@ def euler_integration(motion, destination_frame):
 
 
 def pad_tensor(tensor, mode="reflect", number=None):
-    cut_size = 0
+    # cut_size = 0
     size = tensor.size(2)
-    pad_size = int(size / 4) + int(size / 8) + cut_size
+    # pad_size = int(size / 4) + int(size / 8) + cut_size
+    pad_size = size // 4 + size // 8
+
     # pad_tensor size = 254 ==> pad_size=94
     # pad_tensor size = 508 ==> pad_size=190
     # pad_tensor size = 1018 ==> pad_size=381
     pad = (pad_size, pad_size, pad_size, pad_size)
 
     if mode=="reflect":
-        pad = nn.ReflectionPad2d(pad_size)
-        padded_tensor = pad(tensor)    
+        # pad = nn.ReflectionPad2d(pad_size)
+        # padded_tensor = pad(tensor)
+        padded_tensor = F.pad(tensor, pad, "reflect")   
     elif mode=="constant": # False
         pdb.set_trace()
         padded_tensor = F.pad(tensor, pad, "constant", number)
@@ -118,8 +121,6 @@ def resize_flow(flow, size):
 
 def blend_feature(feature, flow, idx, n_frames):
     # return torch.cat([feature, feature], dim=-1)   
-
-
     # idx = 0
     # n_frames = 120
 
@@ -135,13 +136,12 @@ def blend_feature(feature, flow, idx, n_frames):
         cut_size = 2
     elif feature.size(2) == 256:
         cut_size = 1
-        
+
     if not cut_size == 0:
         feature = feature[:,:,cut_size:-cut_size,cut_size:-cut_size]
         flow = flow[:,:,cut_size:-cut_size,cut_size:-cut_size]
     else:
         pass # ==> pdb.set_trace()
-
 
     ### Reflection padding for flow
     future_flow = pad_tensor(flow, mode="reflect").float().cuda()

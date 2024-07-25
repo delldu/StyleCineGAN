@@ -498,7 +498,6 @@ class Generator(nn.Module):
         skip = self.to_rgb1(out, latent[:, 1])
         # todos.debug.output_var("skip", skip)
         # tensor [skip] size: [1, 3, 4, 4], min: -0.005031, max: 0.001965, mean: -0.001057
-
         
         # len(self.convs) -- 16, len(self.to_rgbs) --- 8
         i = 1 # ===> i = 1, 3, 5, 7, 9, 11, 13, 15
