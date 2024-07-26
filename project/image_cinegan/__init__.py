@@ -161,10 +161,11 @@ def image_predict(input_files, output_dir):
                         n_frames=n_frames,
                         flow=up_flow, ###!!!!!!!!!!!!!!!!###
                     )
-        
+        # todos.debug.output_var("result", result)
         # tensor [result] size: [1, 3, 1024, 1024], min: -0.278078, max: -0.139095, mean: -0.248583            
+        result = (result + 1.0)/2.0
+        result = result.clamp(0.0, 1.0)
         result = result*mask_tensor + image_tensor * (1 - mask_tensor)
-        todos.debug.output_var("result", result)
 
         output_file = f"{output_dir}/{index:06d}.png"
         todos.data.save_tensor([result], output_file)
