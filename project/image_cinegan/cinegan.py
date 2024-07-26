@@ -613,43 +613,31 @@ def euler_integration(motion, frame_index):
     :param frame_index: The number of times the motion field should be integrated.
     :return: The displacement map resulting from repeated integration of the motion field.
     """
-
     # tensor [motion] size: [1, 2, 224, 224], min: -0.024374, max: 0.242733, mean: 0.046427
     # frame_index = 0
 
     B, C, H, W = motion.shape
     y, x = torch.meshgrid([torch.linspace(0, H - 1, H), torch.linspace(0, W - 1, W)])
-    # coord = torch.stack([x, y], dim=0).long().to(motion.device) # size() -- [2, 224, 224]
-    # d_coord = coord.clone().float().to(motion.device)
-
     coord = torch.stack([x, y], dim=0).to(motion.device) # size() -- [2, 224, 224]
     d_coord = coord.clone()
 
-
-    # tensor [d_coord] size: [2, 442, 442], min: 0.0, max: 441.0, mean: 220.500015
-
-    # print(f"frame_index = {frame_index}")
-    # todos.debug.output_var("motion", motion)
-    # todos.debug.output_var("d_coord", d_coord)
-
-    # motion = motion.cuda()
-
     displacements = torch.zeros(1, 2, H, W).to(motion.device)
     invalid_mask = torch.zeros(1, H, W).bool().to(motion.device)
+    flow =  motion[0]
+    for id in range(1, frame_index + 1):
+        d_r = torch.round(d_coord[0]).long()
+        d_c = torch.round(d_coord[1]).long()
+        d_coord += flow[:, d_c, d_r]
 
-    for frame_id in range(1, frame_index + 1):
-        # print(f"frame_id = {frame_id}")
-        d_coord += motion[0][:, torch.round(d_coord[1]).long(), torch.round(d_coord[0]).long()]
         out_of_bounds_x = torch.logical_or(d_coord[0] > (W - 1), d_coord[0] < 0)
         out_of_bounds_y = torch.logical_or(d_coord[1] > (H - 1), d_coord[1] < 0)
         invalid_mask = torch.logical_or(out_of_bounds_x.unsqueeze(0), invalid_mask)
         invalid_mask = torch.logical_or(out_of_bounds_y.unsqueeze(0), invalid_mask)
 
-        # Set the displacement of invalid pixels to zero, to avoid out-of-bounds access errors
-        # d_coord[invalid_mask.expand_as(d_coord)] = coord[invalid_mask.expand_as(d_coord)].float()
-        # displacements = (d_coord - coord.float()).unsqueeze(0)
-
-        d_coord[invalid_mask.expand_as(d_coord)] = coord[invalid_mask.expand_as(d_coord)]
+        # invalid_mask.size() -- [1, 224, 224]
+        # invalid_mask.expand_as(d_coord).size() -- [2, 224, 224]
+        updated_mask = invalid_mask.expand_as(d_coord)
+        d_coord[updated_mask] = coord[updated_mask]
         displacements = (d_coord - coord).unsqueeze(0)
 
     # todos.debug.output_var("displacements", displacements)
