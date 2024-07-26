@@ -1,0 +1,3 @@
+2474cd3fc5713fb96008f6e57d4dc755  encoder_v2.pth
+f106e456903ff9cb504aab488ee19c35  sg2-lhq-1024-mean.pth
+57a47475bd80eec904301cd4b5046e45  sg2-lhq-1024.pth
