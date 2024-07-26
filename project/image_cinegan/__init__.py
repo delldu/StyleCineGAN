@@ -83,7 +83,7 @@ def get_encoder_model(device):
     model = model.to(device)
     model.eval()
 
-    # print(f"Running on {device} ...")
+    print(f"Running on {device} ...")
 
     # # expamples = torch.randn(1, 4, 512, 512).to(device).clamp(0.0, 1.0)
     # # model = torch.jit.trace(model, expamples)
@@ -159,15 +159,13 @@ def image_predict(input_files, output_dir):
                         feature=feature,
                         idx=index,
                         n_frames=n_frames,
-                        flow=up_flow, ###!!!!!!!!!!!!!!!!###
+                        flow=up_flow
                     )
         # todos.debug.output_var("result", result)
         # tensor [result] size: [1, 3, 1024, 1024], min: -0.278078, max: -0.139095, mean: -0.248583            
-        result = (result + 1.0)/2.0
-        result = result.clamp(0.0, 1.0)
-        result = result*mask_tensor + image_tensor * (1 - mask_tensor)
+        output_tensor = result*mask_tensor + image_tensor * (1 - mask_tensor)
 
         output_file = f"{output_dir}/{index:06d}.png"
-        todos.data.save_tensor([result], output_file)
+        todos.data.save_tensor([output_tensor], output_file)
 
     todos.model.reset_device()
