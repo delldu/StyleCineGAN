@@ -7,16 +7,20 @@ from typing import List
 import todos
 import pdb
 
-def downscale(x, scale_times=1, mode='bilinear'):
-    for i in range(scale_times):
-        x = F.interpolate(x, scale_factor=0.5, mode=mode)
-    return x
+# def downscale(x, scale_times:int=1, mode:str='bilinear'):
+#     todos.debug.output_var("x", x)
+#     for i in range(scale_times):
+#         x = F.interpolate(x, scale_factor=0.5, mode=mode)
+#     todos.debug.output_var("downscale x", x)
+#     print("=" * 80)
+
+#     return x
 
 class Encoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.enc = Encoder_v2()
-        self.scale = 2
+        # self.scale = 2
         self.register_buffer('mean', torch.Tensor([0.5, 0.5, 0.5]).view(1, 3, 1, 1))
         self.register_buffer('std', torch.Tensor([0.5, 0.5, 0.5]).view(1, 3, 1, 1))
 
@@ -42,8 +46,11 @@ class Encoder(nn.Module):
     def forward(self, img) -> List[torch.Tensor]: 
         img = self.normalize(img)
 
+        # downscale 2 times
+        d4_img = F.interpolate(img, scale_factor=0.25, mode='bilinear')
+
         # Reconstruction
-        w_recon, fea = self.enc(downscale(img, self.scale, 'bilinear')) 
+        w_recon, fea = self.enc(d4_img) 
         w_recon = w_recon + self.dlatent_avg.to(img.device)
 
         return w_recon, fea
@@ -51,11 +58,8 @@ class Encoder(nn.Module):
 
 class Encoder_v2(nn.Module):
     def __init__(self, n_styles=18, stride=(2, 2)):
-    
         super().__init__()  
-        # n_styles = 18
         resnet50 = IResNet()
-        # resnet50.load_state_dict(torch.load(opts.arcface_model_path)) # './pretrained_models/backbone.pth' -- 167M
 
         # input conv layer
         self.conv = nn.Sequential(*list(resnet50.children())[:3])
@@ -72,7 +76,6 @@ class Encoder_v2(nn.Module):
             self.styles.append(nn.Linear(960 * 9, 512))
 
         self.idx_k = 10 # int(opts.idx_k) # === 10
-        # self.feat_size = 128
         self.feat_ch = 256
         self.in_feat = 64
         
@@ -88,7 +91,7 @@ class Encoder_v2(nn.Module):
 
         )
 
-    def forward(self, x):
+    def forward(self, x) -> List[torch.Tensor]:
         # todos.debug.output_var("x", x)
         # tensor [x] size: [1, 3, 256, 256], min: -0.92598, max: 1.0, mean: -0.032175
     
@@ -96,10 +99,11 @@ class Encoder_v2(nn.Module):
         features = []
         x = self.conv(x) # size = (batch_size, 64, 256, 256)
 
-        if self.idx_k in [10,11,12,13,14,15]: # True
-            content = self.content_layer(x) # size = (batch_size, 256, 128, 128)
-        else:
-            pdb.set_trace()
+        # if self.idx_k in [10,11,12,13,14,15]: # True
+        #     content = self.content_layer(x) # size = (batch_size, 256, 128, 128)
+        # else:
+        #     pdb.set_trace()
+        content = self.content_layer(x) # size = (batch_size, 256, 128, 128)
 
         x = self.block_1(x)  # torch.Size([batch_size, 64, 128, 128])
         
@@ -115,8 +119,10 @@ class Encoder_v2(nn.Module):
         x = torch.cat(features, dim=1)
         x = x.view(x.size(0), -1)
 
-        for i in range(len(self.styles)):
-            latents.append(self.styles[i](x))
+        # for i in range(len(self.styles)):
+        #     latents.append(self.styles[i](x))
+        for i, blk in enumerate(self.styles):
+            latents.append(blk(x))
 
         out = torch.stack(latents, dim=1)
         # todos.debug.output_var("latents", latents)
@@ -210,22 +216,11 @@ class IResNet(nn.Module):
             layers=[3, 4, 14, 3],
             dropout=0, 
             num_features=512, 
-            zero_init_residual=False,
             groups=1, 
             width_per_group=64, 
-            # fp16=False
         ):
         super().__init__()
-        # layers = [3, 4, 14, 3]
-        # dropout = 0
-        # num_features = 512
-        # zero_init_residual = False
-        # groups = 1
-        # width_per_group = 64
-        # fp16 = False
 
-
-        # self.fp16 = fp16
         self.inplanes = 64
         self.dilation = 1
         self.groups = groups # === 1
@@ -258,21 +253,9 @@ class IResNet(nn.Module):
         self.fc = nn.Linear(512 * block.expansion * self.fc_scale, num_features)
 
         self.features = nn.BatchNorm1d(num_features, eps=1e-05)
-        nn.init.constant_(self.features.weight, 1.0)
-        self.features.weight.requires_grad = False
+        # nn.init.constant_(self.features.weight, 1.0)
+        # self.features.weight.requires_grad = False
 
-        # for m in self.modules():
-        #     if isinstance(m, nn.Conv2d):
-        #         nn.init.normal_(m.weight, 0, 0.1)
-        #     elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-        #         nn.init.constant_(m.weight, 1)
-        #         nn.init.constant_(m.bias, 0)
-
-        # if zero_init_residual: # False
-        #     for m in self.modules():
-        #         if isinstance(m, IBasicBlock):
-        #             nn.init.constant_(m.bn2.weight, 0)
-        # pdb.set_trace()
 
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         downsample = None

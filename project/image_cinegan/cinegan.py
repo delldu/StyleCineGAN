@@ -409,6 +409,10 @@ class Generator(nn.Module):
 
         self.load_weights()
 
+        self.noise_list = [
+            getattr(self.noises, f'noise_{i}') for i in range(self.num_layers) # self.num_layers === 17
+        ]
+
         # self.convs1 = ...
         # self.convs2 = ...
         # self.noise1 = ...
@@ -425,9 +429,11 @@ class Generator(nn.Module):
     def forward(self, latent, feature, idx, n_frames, flow):
         recon_feature_idx = 10
 
-        noise = [
-            getattr(self.noises, f'noise_{i}') for i in range(self.num_layers) # self.num_layers === 17
-        ]
+        # noise = [
+        #     getattr(self.noises, f'noise_{i}') for i in range(self.num_layers) # self.num_layers === 17
+        # ]
+        noise:List[torch.Tensor] = self.noise_list
+
         # 4, 8, 8, 16, 16, 32, 32, 64, 64,  128, 128, 256, 256, 512, 512, 1024, 1024
         # self.noises.noise_0.size() -- [1, 1, 4, 4]
         # self.noises.noise_16.size() -- [1, 1, 1024, 1024]
@@ -436,7 +442,7 @@ class Generator(nn.Module):
         # latent = styles[0]
             
         out = self.input(latent)
-        out = self.conv1(out, latent[:, 0], noise=noise[0])
+        out = self.conv1(out, latent[:, 0], noise=noise[0].to(latent.device))
         skip = self.to_rgb1(out, latent[:, 1])
         # todos.debug.output_var("skip", skip)
         # tensor [skip] size: [1, 3, 4, 4], min: -0.005031, max: 0.001965, mean: -0.001057
@@ -446,21 +452,21 @@ class Generator(nn.Module):
         for conv1, conv2, noise1, noise2, to_rgb in zip(self.convs[::2], self.convs[1::2], 
                 noise[1::2], noise[2::2], self.to_rgbs
         ):
-            out = conv1(out, latent[:, i], noise=noise1)
+            out = conv1(out, latent[:, i], noise=noise1.to(latent.device))
 
             if (i+1 < recon_feature_idx):
                 # ==> i = 1, 3, 5, 7
-                out = conv2(out, latent[:, i+1], noise=noise2)
+                out = conv2(out, latent[:, i+1], noise=noise2.to(latent.device))
             elif i+1 == recon_feature_idx:
                 # ==> i == 9
                 out = feature
-                out = conv2(out, latent[:, i+1], noise=noise2)
+                out = conv2(out, latent[:, i+1], noise=noise2.to(latent.device))
                 out_ = warp_one_level(out, flow, idx, n_frames) # xxxx_debug 
                 # skip = to_rgb(out_, latent[:,i+2], skip=None)
                 skip = to_rgb(out_, latent[:,i+2])
             else:
                 # ==> i == 11, 13, 15
-                out = conv2(out, latent[:,i+1], noise=noise2)
+                out = conv2(out, latent[:,i+1], noise=noise2.to(latent.device))
                 out_ = warp_one_level(out, flow, idx, n_frames) # xxxx_debug 
                 skip = to_rgb(out_, latent[:,i+2], skip=skip)
                     
@@ -472,7 +478,7 @@ class Generator(nn.Module):
         return image.clamp(0.0, 1.0)
 
 
-def upfirdn2d(input, kernel, up=1, pad=(0, 0)):
+def upfirdn2d(input, kernel, up:int=1, pad:List[int]=(0, 0)):
     B, C, H, W = input.shape
     H4, W4 = kernel.shape
     pad_x0, pad_x1, pad_y0, pad_y1 = pad[0], pad[1], pad[0], pad[1]
@@ -488,7 +494,7 @@ def upfirdn2d(input, kernel, up=1, pad=(0, 0)):
 
 
 
-def upfirdn2d_native(input, kernel, up, pad_x0, pad_x1, pad_y0, pad_y1):
+def upfirdn2d_native(input, kernel, up:int, pad_x0:int, pad_x1:int, pad_y0:int, pad_y1:int):
     # kernel.size() -- [4, 4]
 
     # todos.debug.output_var("input", input)
@@ -613,16 +619,13 @@ def euler_integration(motion, frame_index):
     :param frame_index: The number of times the motion field should be integrated.
     :return: The displacement map resulting from repeated integration of the motion field.
     """
-    # tensor [motion] size: [1, 2, 224, 224], min: -0.024374, max: 0.242733, mean: 0.046427
-    # frame_index = 0
-
     B, C, H, W = motion.shape
     y, x = torch.meshgrid([torch.linspace(0, H - 1, H), torch.linspace(0, W - 1, W)])
     coord = torch.stack([x, y], dim=0).to(motion.device) # size() -- [2, 224, 224]
     d_coord = coord.clone()
 
-    displacements = torch.zeros(1, 2, H, W).to(motion.device)
-    invalid_mask = torch.zeros(1, H, W).bool().to(motion.device)
+    displacements = torch.zeros(2, H, W).to(motion.device)
+    invalid_mask = torch.zeros(H, W).bool().to(motion.device)
     flow =  motion[0]
     for id in range(1, frame_index + 1):
         d_r = torch.round(d_coord[0]).long()
@@ -631,17 +634,13 @@ def euler_integration(motion, frame_index):
 
         out_of_bounds_x = torch.logical_or(d_coord[0] > (W - 1), d_coord[0] < 0)
         out_of_bounds_y = torch.logical_or(d_coord[1] > (H - 1), d_coord[1] < 0)
-        invalid_mask = torch.logical_or(out_of_bounds_x.unsqueeze(0), invalid_mask)
-        invalid_mask = torch.logical_or(out_of_bounds_y.unsqueeze(0), invalid_mask)
+        invalid_mask = torch.logical_or(out_of_bounds_x, invalid_mask)
+        invalid_mask = torch.logical_or(out_of_bounds_y, invalid_mask)
 
-        # invalid_mask.size() -- [1, 224, 224]
-        # invalid_mask.expand_as(d_coord).size() -- [2, 224, 224]
-        updated_mask = invalid_mask.expand_as(d_coord)
+        # invalid_mask.size() -- [224, 224]
+        updated_mask = invalid_mask.unsqueeze(0).expand_as(d_coord) # size() -- [2, 224, 224]
         d_coord[updated_mask] = coord[updated_mask]
-        displacements = (d_coord - coord).unsqueeze(0)
-
-    # todos.debug.output_var("displacements", displacements)
-    # print("-" * 80)
+        displacements = (d_coord - coord)
 
     # frame_index = 0
     # tensor [motion] size: [1, 2, 442, 442], min: -0.49711, max: 0.086481, mean: -0.093155
@@ -654,22 +653,7 @@ def euler_integration(motion, frame_index):
     # tensor [displacements] size: [1, 2, 888, 888], min: -2.862347, max: 99.450378, mean: 19.937889
     # --------------------------------------------------------------------------------
 
-    return displacements
-
-backwarp_tenGrid = {}
-def backwarp(tenIn, tenFlow):
-    if str(tenFlow.shape) not in backwarp_tenGrid:
-        tenHor = torch.linspace(-1.0 + (1.0 / tenFlow.shape[3]), 1.0 - (1.0 / tenFlow.shape[3]), tenFlow.shape[3]).view(1, 1, 1, -1).repeat(1, 1, tenFlow.shape[2], 1)
-        tenVer = torch.linspace(-1.0 + (1.0 / tenFlow.shape[2]), 1.0 - (1.0 / tenFlow.shape[2]), tenFlow.shape[2]).view(1, 1, -1, 1).repeat(1, 1, 1, tenFlow.shape[3])
-
-        backwarp_tenGrid[str(tenFlow.shape)] = torch.cat([tenHor, tenVer], 1).cuda()
-    # end
-
-    tenFlow = torch.cat([tenFlow[:, 0:1, :, :] / ((tenIn.shape[3] - 1.0) / 2.0), tenFlow[:, 1:2, :, :] / ((tenIn.shape[2] - 1.0) / 2.0)], 1)
-
-    return torch.nn.functional.grid_sample(input=tenIn, grid=(backwarp_tenGrid[str(tenFlow.shape)] + tenFlow).permute(0, 2, 3, 1), mode='bilinear', padding_mode='zeros', align_corners=False)
-
-
+    return displacements.unsqueeze(0)
 
 
 def joint_splatting(feature_map1, weights1, flow1,
@@ -714,18 +698,14 @@ def joint_splatting(feature_map1, weights1, flow1,
 
 def FunctionSoftsplat(tensorInput, tensorFlow, weights, output_size=None):
     assert (weights is None or weights.shape[1] == 1)
-    tensorInput = torch.cat([tensorInput * weights, weights], 1)
+    tensorInput = torch.cat([tensorInput * weights, weights], dim=1)
     tensorOutput = _FunctionSoftsplat.apply(tensorInput, tensorFlow)
 
-    # # xxxx_3333
-    # tensorOutput = softsplat(tensorInput[0].cpu().numpy(), tensorFlow[0].cpu().numpy())
-    # tensorOutput = torch.from_numpy(tensorOutput).cuda().unsqueeze(0)
-
-    tenSplattedMetric = tensorOutput[:, -1:, :, :]
+    # tensorOutput = softsplat(tensorInput, tensorFlow)
+    tenSplattedMetric = tensorOutput[:, -1:, :, :] # [1, 257, 224, 448] ==> [1, 1, 224, 448]
     tenSplattedMetric[tenSplattedMetric == 0] = 1
     tensorOutput = tensorOutput[:, :-1, :, :] / tenSplattedMetric
-
-    tensorOutput = tensorOutput[:, :, :output_size[0], :output_size[1]]
+    tensorOutput = tensorOutput[:, :, :output_size[0], :output_size[1]] # [1, 256, 224, 448] ==> [1, 256, 224, 224]
 
     # tensor [tensorInput] size: [1, 1, 888, 1776], min: 1.0, max: 1.0, mean: 1.0
     # tensor [tensorFlow] size: [1, 2, 888, 1776], min: -888.0, max: 99.450378, mean: -212.031052
@@ -909,4 +889,67 @@ def fused_leaky_relu(input, bias):
     B, C, H, W = input.size()
     bbb = input + bias.unsqueeze(0).unsqueeze(2).unsqueeze(2)
     return F.leaky_relu(bbb, 0.2) * (2 ** 0.5)
+
+
+
+def softsplat(input_tensor, flow):
+    """
+    使用PyTorch实现Softsplat操作。
+    
+    参数:
+    - input_tensor: 输入特征图或图像，形状为(B, C, H, W)
+    - flow: 光流场，形状为(B, 2, H, W)，第一维是x和y方向的光流
+    
+    返回:
+    - output_tensor: 重投影后的特征图，形状与input_tensor相同
+    """
+    B, C, H, W = input_tensor.shape
+    
+    # 初始化输出特征图
+    output_tensor = torch.zeros_like(input_tensor)
+    
+    # 为每个像素计算输出坐标
+    coord_y, coord_x = torch.meshgrid(torch.arange(H), torch.arange(W))
+    coord_y = coord_y.to(input_tensor.device)
+    coord_x = coord_x.to(input_tensor.device)
+    
+    # 应用光流
+    coord_y_reproj = coord_y + flow[:, 1]  # dy
+    coord_x_reproj = coord_x + flow[:, 0]  # dx
+    
+    # 四舍五入到最近的整数坐标
+    coord_y_int = coord_y_reproj.round().long()
+    coord_x_int = coord_x_reproj.round().long()
+    
+    # 计算分数部分
+    coord_y_frac = coord_y_reproj - coord_y_int
+    coord_x_frac = coord_x_reproj - coord_x_int
+    
+    # 计算双线性插值权重
+    weight_nw = (1.0 - coord_x_frac) * (1.0 - coord_y_frac)
+    weight_ne = coord_x_frac * (1.0 - coord_y_frac)
+    weight_sw = (1.0 - coord_x_frac) * coord_y_frac
+    weight_se = coord_x_frac * coord_y_frac
+    
+    # 计算重投影坐标的索引
+    coord_y_nw = coord_y_int
+    coord_x_nw = coord_x_int
+    coord_y_ne = torch.clamp(coord_y_nw + 1, 0, H - 1)
+    coord_x_ne = coord_x_nw
+    coord_y_sw = torch.clamp(coord_y_nw, 0, H - 1)
+    coord_x_sw = torch.clamp(coord_x_nw + 1, 0, W - 1)
+    coord_y_se = torch.clamp(coord_y_nw + 1, 0, H - 1)
+    coord_x_se = torch.clamp(coord_x_nw + 1, 0, W - 1)
+    
+    # 应用双线性插值
+    for b in range(B):
+        for c in range(C):
+            output_tensor[b, c] = (
+                weight_nw * input_tensor[b, c, coord_y_nw, coord_x_nw] +
+                weight_ne * input_tensor[b, c, coord_y_ne, coord_x_ne] +
+                weight_sw * input_tensor[b, c, coord_y_sw, coord_x_sw] +
+                weight_se * input_tensor[b, c, coord_y_se, coord_x_se]
+            )
+    
+    return output_tensor
 

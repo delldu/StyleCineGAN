@@ -85,20 +85,20 @@ def get_encoder_model(device):
 
     print(f"Running on {device} ...")
 
-    # # expamples = torch.randn(1, 4, 512, 512).to(device).clamp(0.0, 1.0)
-    # # model = torch.jit.trace(model, expamples)
+    # expamples = torch.randn(1, 4, 512, 512).to(device).clamp(0.0, 1.0)
+    # model = torch.jit.trace(model, expamples)
 
-    # # make sure model good for C/C++
-    # model = torch.jit.script(model)
-    # # https://github.com/pytorch/pytorch/issues/52286
-    # torch._C._jit_set_profiling_executor(False)
-    # # C++ Reference
-    # # torch::jit::getProfilingMode() = false;                                                                                                             
-    # # torch::jit::setTensorExprFuserEnabled(false);
+    # make sure model good for C/C++
+    model = torch.jit.script(model)
+    # https://github.com/pytorch/pytorch/issues/52286
+    torch._C._jit_set_profiling_executor(False)
+    # C++ Reference
+    # torch::jit::getProfilingMode() = false;                                                                                                             
+    # torch::jit::setTensorExprFuserEnabled(false);
 
-    # todos.data.mkdir("output")
-    # if not os.path.exists("output/image_cineenc.torch"):
-    #     model.save("output/image_cineenc.torch")
+    todos.data.mkdir("output")
+    if not os.path.exists("output/image_cineenc.torch"):
+        model.save("output/image_cineenc.torch")
 
     return model
 
@@ -143,7 +143,7 @@ def image_predict(input_files, output_dir):
     # todos.debug.output_var("up_flow", up_flow)
     # tensor [up_flow] size: [1, 2, 1024, 1024], min: -0.942374, max: 0.936256, mean: -0.108493
 
-    n_frames = 120
+    n_frames = 24 #120
     latents = []
     for _ in range(n_frames):
         latents.append(latent) # latent.size() -- [1, 18, 512]
